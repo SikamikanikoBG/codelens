@@ -27,3 +27,4 @@ ENV/
 .idea/
 .vscode/
 .DS_Store
+.codelens

@@ -1,0 +1,244 @@
+CODEBASE SUMMARY:
+This project contains 14 files:
+File types: .py: 14
+Total lines of code: 709
+Average file size: 50.6 lines
+
+KEY INSIGHTS:
+- Found 4 TODOs across 14 files
+
+CODE METRICS:
+Functions: 21 (19 documented)
+Classes: 4 (4 documented)
+Documentation coverage: 92.0%
+
+TODOS:
+- [low] src\codelens\analyzer\javascript.py: Extract comments and TODOs
+- [low] src\codelens\analyzer\python.py: Extract comments and TODOs
+- [low] src\codelens\formatters\llm.py: Add TODOs
+- [low] src\codelens\processors\summary.py: Track TODOs
+
+ENTRY POINTS:
+- src\codelens\cli.py
+
+CORE FILES:
+- src\codelens\analyzer\base.py
+- src\codelens\processors\summary.py
+
+PROJECT STRUCTURE AND CODE INSIGHTS:
+
+================================================================================
+src/codelens/ (58 lines)
+================================================================================
+  __init__.py
+    Lines: 3
+
+  cli.py
+    Lines: 55
+    IMPORTS:
+      import click
+      from pathlib import Path
+      from rich.console import Console
+      from analyzer.base import ProjectAnalyzer
+      import traceback
+    FUNCTIONS:
+      main:
+        Args: path, output, format, debug
+        Line: 15
+        Doc: Analyze code and generate LLM-friendly context.
+
+
+================================================================================
+src/codelens/analyzer/ (264 lines)
+================================================================================
+  base.py
+    Lines: 86
+    IMPORTS:
+      from pathlib import Path
+      from typing import Dict
+      from typing import List
+      from typing import Optional
+      from dataclasses import dataclass
+      from python import PythonAnalyzer
+      from javascript import JavaScriptAnalyzer
+      from formatters.llm import format_analysis
+      import json
+      from processors.insights import generate_insights
+      from processors.summary import generate_summary
+    FUNCTIONS:
+      to_text:
+        Args: self
+        Line: 15
+        Doc: Convert analysis to LLM-friendly text format.
+      to_json:
+        Args: self
+        Line: 20
+        Doc: Convert analysis to JSON format.
+      __init__:
+        Args: self
+        Line: 32
+      analyze:
+        Args: self, path
+        Line: 41
+        Doc: Analyze entire project directory.
+      _collect_files:
+        Args: self, path
+        Line: 69
+        Doc: Collect all analyzable files from directory.
+      should_ignore:
+        Args: path
+        Line: 73
+    CLASSES:
+      AnalysisResult:
+        Line: 8
+        Methods: to_text, to_json
+        Doc: Container for analysis results.
+      ProjectAnalyzer:
+        Line: 29
+        Methods: __init__, analyze, _collect_files
+        Doc: Main project analyzer that coordinates language-specific analyzers.
+
+  javascript.py
+    Lines: 88
+    IMPORTS:
+      import re
+      from pathlib import Path
+      from typing import Dict
+      from typing import List
+    FUNCTIONS:
+      analyze_file:
+        Args: self, file_path
+        Line: 9
+        Doc: Analyze a JavaScript/TypeScript file.
+    CLASSES:
+      JavaScriptAnalyzer:
+        Line: 6
+        Methods: analyze_file
+        Doc: JavaScript/TypeScript code analyzer using regex patterns.
+    TODOS:
+      Line 60: Extract comments and TODOs
+
+  python.py
+    Lines: 90
+    IMPORTS:
+      import ast
+      from pathlib import Path
+      from typing import Dict
+      from typing import List
+      from typing import Optional
+    FUNCTIONS:
+      analyze_file:
+        Args: self, file_path
+        Line: 9
+        Doc: Analyze a Python file.
+    CLASSES:
+      PythonAnalyzer:
+        Line: 6
+        Methods: analyze_file
+        Doc: Python-specific code analyzer using AST.
+    TODOS:
+      Line 69: Extract comments and TODOs
+
+  __init__.py (empty)
+
+================================================================================
+src/codelens/formatters/ (155 lines)
+================================================================================
+  llm.py
+    Lines: 155
+    IMPORTS:
+      from typing import Dict
+      from analyzer.base import AnalysisResult
+    FUNCTIONS:
+      format_analysis:
+        Args: result
+        Line: 5
+        Doc: Format analysis results in an LLM-friendly text format.
+      _format_file_analysis:
+        Args: filename, analysis
+        Line: 108
+        Doc: Format single file analysis.
+    TODOS:
+      Line 147: Add TODOs
+
+  __init__.py (empty)
+
+================================================================================
+src/codelens/processors/ (232 lines)
+================================================================================
+  __init__.py
+    Lines: 4
+    IMPORTS:
+      from summary import generate_summary
+      from insights import generate_insights
+
+  insights.py
+    Lines: 48
+    IMPORTS:
+      from typing import Dict
+      from typing import List
+    FUNCTIONS:
+      generate_insights:
+        Args: analysis
+        Line: 3
+        Doc: Generate insights from analysis results.
+
+  summary.py
+    Lines: 180
+    IMPORTS:
+      from typing import Dict
+      from typing import List
+      from pathlib import Path
+    FUNCTIONS:
+      generate_summary:
+        Args: analysis
+        Line: 6
+        Doc: Generate comprehensive project summary from analysis results.
+
+Args:
+    analysis: Dictionary containing analysis results for each file
+    
+Returns:
+    Dictionary containing project summary metrics and insights
+      _process_file_stats:
+        Args: file_path, analysis, summary
+        Line: 62
+        Doc: Process basic file statistics.
+      _process_code_metrics:
+        Args: analysis, summary
+        Line: 74
+        Doc: Process code metrics from analysis.
+      _process_maintenance_info:
+        Args: file_path, analysis, summary
+        Line: 97
+        Doc: Process maintenance-related information.
+      _process_structure_info:
+        Args: file_path, analysis, summary
+        Line: 114
+        Doc: Process project structure information.
+      _calculate_final_metrics:
+        Args: summary
+        Line: 128
+        Doc: Calculate final averages and percentages.
+      _estimate_todo_priority:
+        Args: text
+        Line: 151
+        Doc: Estimate TODO priority based on content.
+      _is_potential_entry_point:
+        Args: file_path, analysis
+        Line: 160
+        Doc: Identify if a file is a potential entry point.
+      _is_core_file:
+        Args: analysis
+        Line: 173
+        Doc: Identify if a file is likely a core component.
+    TODOS:
+      Line 99: Track TODOs
+
+
+================================================================================
+tests/tests_codelens/ (0 lines)
+================================================================================
+  __init__.py (empty)
+  test_analyzer.py (empty)
+  test_formatters.py (empty)

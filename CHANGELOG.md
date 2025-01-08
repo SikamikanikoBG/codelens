@@ -1,3 +1,14 @@
+## [0.2.1] - 2025-01-08
+
+### Added
+- n/a
+
+### Changed
+- n/a
+
+### Fixed
+- Minor documentation improvements.
+
 ## [0.2.0] - 2025-01-08
 
 ### Added

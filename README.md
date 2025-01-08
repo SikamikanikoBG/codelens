@@ -91,7 +91,7 @@ CodeLens creates a `.codelens` directory containing the following:
 
 ## Requirements
 
-- Python >= 3.6
+- Python >= 3.8
 
 ---
 

@@ -1,4 +1,3 @@
-# src/codelens/analyzer/python.py
 import ast
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -17,6 +16,7 @@ class PythonAnalyzer:
             'classes': [],
             'comments': [],
             'todos': [],
+            'full_content': content,  # Store full content for reference
             'metrics': {
                 'loc': len(content.splitlines()),
                 'classes': 0,
@@ -46,10 +46,19 @@ class PythonAnalyzer:
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
                     analysis['metrics']['functions'] += 1
+                    
+                    # Extract function body
+                    body_start = node.body[0].lineno if node.body else node.lineno
+                    body_end = node.body[-1].end_lineno if node.body else node.end_lineno
+                    function_content = '\n'.join(
+                        content.splitlines()[body_start-1:body_end]
+                    )
+                    
                     analysis['functions'].append({
                         'name': node.name,
                         'args': [arg.arg for arg in node.args.args],
                         'docstring': ast.get_docstring(node),
+                        'content': function_content,
                         'loc': len(node.body),
                         'line_number': node.lineno
                     })

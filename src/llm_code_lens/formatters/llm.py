@@ -1,4 +1,3 @@
-# src/codelens/formatters/llm.py
 from typing import Dict
 from ..analyzer.base import AnalysisResult
 
@@ -112,6 +111,11 @@ def _format_file_analysis(filename: str, analysis: dict) -> list:
     metrics = analysis.get('metrics', {})
     sections.append(f"    Lines: {metrics.get('loc', 0)}")
     
+    # Add full content if available
+    if 'full_content' in analysis:
+        sections.append("    CONTENT:")
+        sections.append(f"      {analysis['full_content']}")
+    
     # Add imports
     if analysis.get('imports'):
         sections.append("    IMPORTS:")
@@ -128,6 +132,8 @@ def _format_file_analysis(filename: str, analysis: dict) -> list:
             ])
             if func.get('docstring'):
                 sections.append(f"        Doc: {func['docstring']}")
+            if func.get('content'):
+                sections.append(f"        Content: {func['content']}")
     
     # Add classes
     if analysis.get('classes'):

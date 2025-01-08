@@ -24,11 +24,15 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0.0",
-    "rich>=10.0.0"
+    "rich>=10.0.0",
+    "tiktoken>=0.5.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_code_lens"]
+packages = ["src/llm_code_lens", "scripts"]
 
 [project.optional-dependencies]
 dev = ["pytest>=6.0", "black", "isort"]

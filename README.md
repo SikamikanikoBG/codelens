@@ -1,74 +1,147 @@
-Intelligent code analysis tool that generates LLM-friendly context from your codebase.
+# CodeLens - Intelligent Code Analysis Tool
 
-## Installation
+CodeLens is an intelligent code analysis tool designed to generate LLM-friendly context from your codebase. With seamless integration and insightful output, it helps developers analyze their projects effectively.
 
-```bash
-pip install codelens
-```
-
-## Usage
-
-Basic usage - analyze current directory:
-```bash
-codelens
-```
-
-Analyze specific directory:
-```bash
-codelens path/to/your/code
-```
-
-Specify output format:
-```bash
-codelens --format json  # or txt (default)
-```
+---
 
 ## Features
 
-- Intelligent code analysis for Python and JavaScript/TypeScript
-- LLM-optimized output format
-- Extracts:
-  - Code structure
-  - Functions and classes
-  - Dependencies
-  - TODOs and comments
-  - Key insights
-- No configuration needed
-- Fast and lightweight
+- **Multi-language support**: Analyzes Python and JavaScript/TypeScript codebases.
+- **LLM-optimized analysis**: Extracts key elements like functions, classes, dependencies, and comments.
+- **Token-friendly outputs**: Splits large file contents into token-limited chunks for LLM compatibility.
+- **Seamless CLI**: Easy-to-use command-line interface with multiple options.
+- **TODO tracking**: Highlights TODOs and FIXMEs for better code maintenance.
+- **Pre-commit hook integration**: Automatically runs tests before committing to ensure code quality.
 
-## Output
+---
 
-CodeLens creates a `.codelens` directory containing:
-- `analysis.txt` (or .json): Complete codebase analysis
+## Installation
+
+To install CodeLens, use pip:
+
+```bash
+pip install llm-code-lens
+```
+
+---
+
+## Usage
+
+### Basic Usage
+Analyze the current directory:
+```bash
+llmcl
+```
+
+Analyze a specific directory:
+```bash
+llmcl path/to/your/code
+```
+
+Specify output format (default is `txt`):
+```bash
+llmcl --format json
+```
+
+### Advanced Options
+- Export full file contents in token-limited chunks:
+  ```bash
+  llmcl --full
+  ```
+
+- Enable debug output:
+  ```bash
+  llmcl --debug
+  ```
+
+- Customize the output directory:
+  ```bash
+  llmcl --output /path/to/output
+  ```
+
+---
+
+## Configuration
+
+CodeLens requires no additional configuration. However, you can integrate it with pre-commit hooks for seamless testing workflows.
+
+### Setting up Pre-commit Hooks
+
+1. Navigate to the `scripts/` directory.
+2. Run the following script to install the pre-commit hook:
+   ```bash
+   python scripts/install-hooks.py
+   ```
+3. The pre-commit hook will automatically run tests using `pytest` before committing.
+
+---
+
+## Output Structure
+
+CodeLens creates a `.codelens` directory containing the following:
+- **`analysis.txt` (or `.json`)**: Complete codebase analysis, including:
   - Project summary
   - Key insights
-  - File structure with context
+  - File structure and context
   - Dependencies
   - TODOs and comments
+- **Full file content files**: When using the `--full` option, the full content of files is exported in token-limited chunks.
+
+---
+
+## Requirements
+
+- Python >= 3.6
+
+---
+
+## Development
+
+### Setting up the Environment
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/SikamikanikoBG/codelens.git
+   ```
+2. Navigate to the project directory:
+   ```bash
+   cd codelens
+   ```
+3. Create a virtual environment and activate it:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+4. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Running Tests
+
+Run the test suite using:
+```bash
+pytest
+```
+
+---
+
+## Contributing
+
+We welcome contributions! To get started:
+1. Fork the repository.
+2. Create a new branch for your feature or fix.
+3. Submit a pull request with a detailed description of your changes.
+
+---
 
 ## License
 
-MIT
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-# File: LICENSE
-MIT License
+---
 
-Copyright (c) 2024 Your Name
+## Support
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+For issues or feature requests, please visit our [GitHub Issues](https://github.com/SikamikanikoBG/codelens/issues).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.

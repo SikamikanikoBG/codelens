@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm_code_lens"
-version = "0.2.1"
+version = "0.3.0"
 description = "Intelligent code analysis tool for LLM context generation"
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
-keywords = ["code analysis", "llm", "ast", "static analysis"]
+keywords = ["code analysis", "llm", "ast", "static analysis", "sql analysis"]
 authors = [
     { name = "Arsen Apostolov", email = "arsen.apostolov@gmail.com" }
 ]
@@ -29,13 +29,20 @@ dependencies = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
+    "pyodbc>=4.0.39",  # For SQL Server connectivity
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/llm_code_lens", "scripts"]
 
 [project.optional-dependencies]
-dev = ["pytest>=6.0", "black", "isort"]
+dev = [
+    "pytest>=6.0",
+    "black",
+    "isort",
+    "radon>=5.0.0",
+    "mypy>=1.0.0"
+]
 
 [project.scripts]
 llmcl = "llm_code_lens.cli:main"
@@ -43,3 +50,30 @@ llmcl = "llm_code_lens.cli:main"
 [project.urls]
 "Homepage" = "https://github.com/SikamikanikoBG/codelens.git"
 "Bug Tracker" = "https://github.com/SikamikanikoBG/codelens/issues"
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests"
+]
+addopts = [
+    "--verbose",
+    "--cov=llm_code_lens",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=90"
+]

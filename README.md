@@ -89,6 +89,88 @@ CodeLens creates a `.codelens` directory containing the following:
 
 ---
 
+## SQL Server Integration
+
+CodeLens supports analyzing SQL Server databases including stored procedures, views, and functions.
+
+### Prerequisites
+
+1. **ODBC Driver**: Install the Microsoft ODBC Driver for SQL Server:
+   - Windows: Install "ODBC Driver 17 for SQL Server" from Microsoft
+   - Linux: Follow [Microsoft's instructions](https://learn.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server) for your distribution
+
+2. **Database Access**: Ensure you have appropriate permissions to view database objects
+
+### Configuration
+
+Three ways to configure SQL Server access:
+
+1. **Environment Variables**:
+   ```bash
+   export MSSQL_SERVER=your_server
+   export MSSQL_DATABASE=your_database  # Optional
+   export MSSQL_USERNAME=your_username
+   export MSSQL_PASSWORD=your_password
+   ```
+
+2. **Command Line Options**:
+   ```bash
+   llmcl --sql-server "server_name" --sql-database "database_name"
+   ```
+
+3. **Configuration File** (recommended for teams):
+   Create a `sql-config.json`:
+   ```json
+   {
+     "server": "server_name",
+     "database": "database_name",
+     "env": {
+       "MSSQL_USERNAME": "username",
+       "MSSQL_PASSWORD": "password"
+     }
+   }
+   ```
+   Then use:
+   ```bash
+   llmcl --sql-config sql-config.json
+   ```
+
+### Usage Examples
+
+Analyze both files and SQL Server:
+```bash
+llmcl --sql-server "server_name" --sql-database "database_name"
+```
+
+Export full object definitions:
+```bash
+llmcl --sql-server "server_name" --sql-database "database_name" --full
+```
+
+Analyze specific database with JSON output:
+```bash
+llmcl --sql-config sql-config.json --format json
+```
+
+### Output Structure
+
+SQL analysis includes:
+- Object inventory (procedures, views, functions)
+- Dependencies between objects
+- Complexity metrics
+- TODOs and comments
+- Parameter analysis
+- Full object definitions (with --full flag)
+
+### Security Notes
+
+- Never commit SQL configuration files with credentials
+- Use environment variables or secure secret management
+- Consider using integrated security when possible
+- Ensure minimum required permissions for analysis
+
+---
+
 ## Requirements
 
 - Python >= 3.8

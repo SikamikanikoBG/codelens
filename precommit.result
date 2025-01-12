@@ -1,0 +1,188 @@
+Running pre-commit tests...
+Running pytest...
+============================= test session starts =============================
+platform win32 -- Python 3.8.20, pytest-8.3.4, pluggy-1.5.0 -- C:\Users\Arsen\anaconda3\envs\llmcl\python.exe
+cachedir: .pytest_cache
+rootdir: R:\Projects\codelens
+configfile: pytest.ini
+testpaths: tests
+plugins: cov-5.0.0, mock-3.14.0
+collecting ... collected 29 items
+
+tests/test_analyzer.py::test_python_basic_analysis PASSED                [  3%]
+tests/test_analyzer.py::test_python_complex_analysis PASSED              [  6%]
+tests/test_analyzer.py::test_python_comments_todos PASSED                [ 10%]
+tests/test_analyzer.py::test_javascript_analysis PASSED                  [ 13%]
+tests/test_analyzer.py::test_sql_analysis PASSED                         [ 17%]
+tests/test_analyzer.py::test_project_analysis PASSED                     [ 20%]
+tests/test_cli.py::test_basic_cli PASSED                                 [ 24%]
+tests/test_cli.py::test_cli_json_output PASSED                           [ 27%]
+tests/test_cli.py::test_cli_ignore_patterns PASSED                       [ 31%]
+tests/test_cli.py::test_cli_content_splitting PASSED                     [ 34%]
+tests/test_cli.py::test_ignore_patterns PASSED                           [ 37%]
+tests/test_cli.py::test_content_splitting PASSED                         [ 41%]
+tests/test_cli.py::test_parse_ignore PASSED                              [ 44%]
+tests/test_cli.py::test_cli_debug_mode PASSED                            [ 48%]
+tests/test_cli.py::test_cli_error_handling PASSED                        [ 51%]
+tests/test_cli.py::test_parse_ignore_file_error PASSED                   [ 55%]
+tests/test_cli.py::test_binary_file_detection PASSED                     [ 58%]
+tests/test_cli.py::test_token_splitting_edge_cases FAILED                [ 62%]
+tests/test_cli.py::test_sql_content_export PASSED                        [ 65%]
+tests/test_cli.py::test_combine_results_mixed_types FAILED               [ 68%]
+tests/test_cli.py::test_cli_sql_options PASSED                           [ 72%]
+tests/test_cli.py::test_cli_full_export PASSED                           [ 75%]
+tests/test_cli.py::test_cli_debug_output PASSED                          [ 79%]
+tests/test_formatters.py::test_basic_format PASSED                       [ 82%]
+tests/test_formatters.py::test_python_format PASSED                      [ 86%]
+tests/test_formatters.py::test_js_format PASSED                          [ 89%]
+tests/test_formatters.py::test_sql_format PASSED                         [ 93%]
+tests/test_processors.py::test_generate_summary PASSED                   [ 96%]
+tests/test_processors.py::test_generate_insights PASSED                  [100%]
+
+================================== FAILURES ===================================
+_______________________ test_token_splitting_edge_cases _______________________
+
+tmp_path = WindowsPath('C:/Users/Arsen/AppData/Local/Temp/pytest-of-Arsen/pytest-101/test_token_splitting_edge_case0')
+
+    def test_token_splitting_edge_cases(tmp_path):
+        """Test edge cases in content splitting."""
+        # Test empty content
+        assert split_content_by_tokens("") == [""]
+    
+        # Test content that causes token encoding issues
+        problematic_content = "Hello\x00World" * 1000  # Content with null bytes
+        chunks = split_content_by_tokens(problematic_content)
+        assert len(chunks) > 0
+        assert isinstance(chunks[0], str)
+    
+        # Test very large content
+        large_content = "x" * 1000000
+>       chunks = split_content_by_tokens(large_content)
+
+tests\test_cli.py:161: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\llm_code_lens\cli.py:85: in split_content_by_tokens
+    tokens = encoder.encode(content)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <Encoding 'cl100k_base'>
+text = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+    def encode(
+        self,
+        text: str,
+        *,
+        allowed_special: Union[Literal["all"], AbstractSet[str]] = set(),  # noqa: B006
+        disallowed_special: Union[Literal["all"], Collection[str]] = "all",
+    ) -> list[int]:
+        """Encodes a string into tokens.
+    
+        Special tokens are artificial tokens used to unlock capabilities from a model,
+        such as fill-in-the-middle. So we want to be careful about accidentally encoding special
+        tokens, since they can be used to trick a model into doing something we don't want it to do.
+    
+        Hence, by default, encode will raise an error if it encounters text that corresponds
+        to a special token. This can be controlled on a per-token level using the `allowed_special`
+        and `disallowed_special` parameters. In particular:
+        - Setting `disallowed_special` to () will prevent this function from raising errors and
+          cause all text corresponding to special tokens to be encoded as natural text.
+        - Setting `allowed_special` to "all" will cause this function to treat all text
+          corresponding to special tokens to be encoded as special tokens.
+    
+        ```
+        >>> enc.encode("hello world")
+        [31373, 995]
+        >>> enc.encode("<|endoftext|>", allowed_special={"<|endoftext|>"})
+        [50256]
+        >>> enc.encode("<|endoftext|>", allowed_special="all")
+        [50256]
+        >>> enc.encode("<|endoftext|>")
+        # Raises ValueError
+        >>> enc.encode("<|endoftext|>", disallowed_special=())
+        [27, 91, 437, 1659, 5239, 91, 29]
+        ```
+        """
+        if allowed_special == "all":
+            allowed_special = self.special_tokens_set
+        if disallowed_special == "all":
+            disallowed_special = self.special_tokens_set - allowed_special
+        if disallowed_special:
+            if not isinstance(disallowed_special, frozenset):
+                disallowed_special = frozenset(disallowed_special)
+            if match := _special_token_regex(disallowed_special).search(text):
+                raise_disallowed_special_token(match.group())
+    
+        # https://github.com/PyO3/pyo3/pull/3632
+        if isinstance(allowed_special, frozenset):
+            allowed_special = set(allowed_special)
+    
+        try:
+>           return self._core_bpe.encode(text, allowed_special)
+E           pyo3_runtime.PanicException: called `Result::unwrap()` on an `Err` value: RuntimeError(StackOverflow)
+
+C:\Users\Arsen\anaconda3\envs\llmcl\lib\site-packages\tiktoken\core.py:124: PanicException
+---------------------------- Captured stderr call -----------------------------
+thread '<unnamed>' panicked at src\lib.rs:227:33:
+called `Result::unwrap()` on an `Err` value: RuntimeError(StackOverflow)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+______________________ test_combine_results_mixed_types _______________________
+
+    def test_combine_results_mixed_types():
+        """Test combining different types of results."""
+        fs_result = {
+            "summary": {
+                "project_stats": {
+                    "total_files": 10,
+                    "lines_of_code": 1000
+                },
+                "code_metrics": {
+                    "functions": {"count": 5, "with_docs": 3, "complex": 2},
+                    "classes": {"count": 2, "with_docs": 1},
+                    "imports": {"count": 10, "unique": {"os", "sys"}}
+                },
+                "maintenance": {"todos": ["TODO: test"], "comments_ratio": 0.2},
+                "structure": {"directories": {"/src", "/tests"}}
+            },
+            "insights": ["Test insight"],
+            "files": {"test.py": {}}
+        }
+    
+        sql_result = {
+            "stored_procedures": [{"name": "proc1"}],
+            "views": [{"name": "view1"}],
+            "functions": [{"name": "func1"}]
+        }
+    
+        combined = _combine_results([fs_result, sql_result])
+    
+>       assert combined.summary["project_stats"]["total_files"] == 10
+E       assert 0 == 10
+
+tests\test_cli.py:233: AssertionError
+
+---------- coverage: platform win32, python 3.8.20-final-0 -----------
+Name                                       Stmts   Miss  Cover   Missing
+------------------------------------------------------------------------
+src\llm_code_lens\__init__.py                  1      0   100%
+src\llm_code_lens\analyzer\__init__.py         5      0   100%
+src\llm_code_lens\analyzer\base.py           134     24    82%   62, 129-130, 133, 151-153, 160, 217, 260, 269, 271, 276-281, 295-296, 301, 306-308
+src\llm_code_lens\analyzer\javascript.py      35      0   100%
+src\llm_code_lens\analyzer\python.py         288     86    70%   130-132, 165, 224, 241, 250, 254-257, 261, 347-350, 352-358, 361-362, 378, 380-381, 384, 418-425, 430-437, 442, 447, 449-456, 458-459, 461-462, 465-473, 479-487, 495, 497, 515-522, 529, 533-544
+src\llm_code_lens\analyzer\sql.py            177     52    71%   26-42, 49-53, 65-71, 79-117, 121-158, 162-202, 243, 245, 394
+src\llm_code_lens\cli.py                     298     93    69%   42, 58, 96-110, 114-136, 154-156, 168-169, 212-213, 217-293, 460-462, 481-484, 492-510, 515, 538-540, 551-554, 558-564, 567
+src\llm_code_lens\formatters\__init__.py       0      0   100%
+src\llm_code_lens\formatters\llm.py          178     61    66%   46, 54, 61, 102-103, 122-127, 132-135, 139-140, 144-146, 161, 170-193, 209-210, 219, 223, 255, 263-264, 268-270, 289-299, 309, 315
+src\llm_code_lens\processors\__init__.py       3      0   100%
+src\llm_code_lens\processors\insights.py      21      3    86%   12-13, 29
+src\llm_code_lens\processors\summary.py      117     45    62%   72, 117, 147-149, 158-162, 168, 172, 180, 184, 190-236
+------------------------------------------------------------------------
+TOTAL                                       1257    364    71%
+Coverage HTML written to dir htmlcov
+
+FAIL Required test coverage of 80% not reached. Total coverage: 71.04%
+=========================== short test summary info ===========================
+FAILED tests/test_cli.py::test_token_splitting_edge_cases - pyo3_runtime.Pani...
+FAILED tests/test_cli.py::test_combine_results_mixed_types - assert 0 == 10
+======================== 2 failed, 27 passed in 1.79s =========================
+
+Tests failed. Commit aborted.

@@ -145,37 +145,33 @@ class PythonAnalyzer(BaseAnalyzer):
             }
 
     def _process_imports(self, tree: ast.AST, analysis: dict) -> None:
-        """Extract and analyze import statements."""
+        """Process imports and handle each import statement individually."""
+        unique_imports = set()
+        import_count = 0
+        
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                analysis['metrics']['imports'] += len(node.names)
                 for name in node.names:
-                    import_info = ImportInfo(
-                        name=name.name,
-                        alias=name.asname,
-                        module=None,
-                        is_relative=False,
-                        location=CodeLocation(
-                            line=node.lineno,
-                            column=node.col_offset
-                        )
-                    )
-                    analysis['imports'].append(self._format_import(import_info))
-            
+                    import_count += 1
+                    unique_imports.add(f"import {name.name}")
             elif isinstance(node, ast.ImportFrom):
-                analysis['metrics']['imports'] += len(node.names)
+                module = node.module or ''
+                level = '.' * node.level
+                
+                # Group imports from same module together
                 for name in node.names:
-                    import_info = ImportInfo(
-                        name=name.name,
-                        alias=name.asname,
-                        module=node.module,
-                        is_relative=bool(node.level),
-                        location=CodeLocation(
-                            line=node.lineno,
-                            column=node.col_offset
-                        )
-                    )
-                    analysis['imports'].append(self._format_import(import_info))
+                    import_count += 1
+                    if name.asname:
+                        unique_imports.add(f"from {level}{module} import {name.name} as {name.asname}")
+                    else:
+                        unique_imports.add(f"from {level}{module} import {name.name}")
+        
+        analysis['metrics']['imports'] = import_count
+        analysis['imports'] = sorted(list(unique_imports))
+
+
+
+
     
     def _process_functions(self, tree: ast.AST, analysis: dict, content: str) -> None:
         """Extract and analyze function definitions."""
@@ -219,66 +215,67 @@ class PythonAnalyzer(BaseAnalyzer):
                 })
 
     def _extract_function_args(self, args: ast.arguments) -> List[FunctionArgument]:
-        """Extract detailed function argument information."""
+        """Extract function arguments with improved handling."""
         arguments = []
         
-        # Process positional-only arguments (Python 3.8+)
+        # Handle positional-only arguments (Python 3.8+)
         if hasattr(args, 'posonlyargs'):
             for arg in args.posonlyargs:
-                arguments.append(FunctionArgument(
-                    name=arg.arg,
-                    type_annotation=self._format_annotation(arg.annotation) if arg.annotation else None,
-                    default_value=None,
-                    is_kwonly=False
-                ))
+                arguments.append(self._create_argument(arg))
         
-        # Process positional arguments
+        # Handle regular positional arguments
         for arg in args.args:
-            arguments.append(FunctionArgument(
-                name=arg.arg,
-                type_annotation=self._format_annotation(arg.annotation) if arg.annotation else None,
-                default_value=None,
-                is_kwonly=False
-            ))
+            # Skip self/cls for methods
+            if arg.arg in ('self', 'cls') and len(args.args) > 0:
+                continue
+            arguments.append(self._create_argument(arg))
         
         # Add defaults for positional arguments
         defaults_start = len(arguments) - len(args.defaults)
         for i, default in enumerate(args.defaults):
-            arguments[defaults_start + i].default_value = self._format_annotation(default)
+            if i + defaults_start >= 0:  # Ensure valid index
+                arguments[defaults_start + i].default_value = self._format_annotation(default)
         
-        # Process *args
+        # Handle *args
         if args.vararg:
             arguments.append(FunctionArgument(
-                name=args.vararg.arg,
+                name=f"*{args.vararg.arg}",
                 type_annotation=self._format_annotation(args.vararg.annotation) if args.vararg.annotation else None,
                 default_value=None,
                 is_vararg=True
             ))
         
-        # Process keyword-only arguments
+        # Handle keyword-only arguments
         for arg in args.kwonlyargs:
-            arguments.append(FunctionArgument(
-                name=arg.arg,
-                type_annotation=self._format_annotation(arg.annotation) if arg.annotation else None,
-                default_value=None,
-                is_kwonly=True
-            ))
+            arguments.append(self._create_argument(arg, is_kwonly=True))
         
         # Add defaults for keyword-only arguments
         for i, default in enumerate(args.kw_defaults):
-            if default:
-                arguments[-(len(args.kw_defaults) - i)].default_value = self._format_annotation(default)
+            if default and i < len(args.kwonlyargs):
+                arg_idx = len(arguments) - len(args.kw_defaults) + i
+                if arg_idx >= 0:  # Ensure valid index
+                    arguments[arg_idx].default_value = self._format_annotation(default)
         
-        # Process **kwargs
+        # Handle **kwargs
         if args.kwarg:
             arguments.append(FunctionArgument(
-                name=args.kwarg.arg,
+                name=f"**{args.kwarg.arg}",
                 type_annotation=self._format_annotation(args.kwarg.annotation) if args.kwarg.annotation else None,
                 default_value=None,
                 is_kwarg=True
             ))
         
         return arguments
+
+    def _create_argument(self, arg: ast.arg, is_kwonly: bool = False) -> FunctionArgument:
+        """Helper to create a FunctionArgument instance."""
+        return FunctionArgument(
+            name=arg.arg,
+            type_annotation=self._format_annotation(arg.annotation) if arg.annotation else None,
+            default_value=None,
+            is_kwonly=is_kwonly
+        )
+
     
     def _process_classes(self, tree: ast.AST, analysis: dict, content: str) -> None:
         """Extract and analyze class definitions."""
@@ -450,7 +447,12 @@ class PythonAnalyzer(BaseAnalyzer):
             return self._format_dotted_name(node)
         elif isinstance(node, ast.Subscript):
             value = self._format_annotation(node.value)
-            slice_value = self._format_annotation(node.slice)
+            if isinstance(node.slice, ast.Index):
+                # Handle Python 3.8 style annotations
+                slice_value = self._format_annotation(node.slice.value)
+            else:
+                # Handle Python 3.9+ style annotations
+                slice_value = self._format_annotation(node.slice)
             return f"{value}[{slice_value}]"
         elif isinstance(node, ast.Tuple):
             elements = [self._format_annotation(elt) for elt in node.elts]
@@ -461,12 +463,16 @@ class PythonAnalyzer(BaseAnalyzer):
         elif isinstance(node, ast.Constant):
             return repr(node.value)
         elif isinstance(node, ast.BinOp):
-            # Handle type unions in Python 3.10+
             if isinstance(node.op, ast.BitOr):
                 left = self._format_annotation(node.left)
                 right = self._format_annotation(node.right)
                 return f"Union[{left}, {right}]"
+        elif isinstance(node, ast.Index):
+            # Handle Python 3.8 style index nodes directly
+            return self._format_annotation(node.value)
         return str(node)
+
+
     
     def _format_import(self, import_info: ImportInfo) -> str:
         """Format import information into string representation."""

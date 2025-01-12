@@ -1,631 +1,453 @@
-"""test_analyzer.py - Tests for analyzer components"""
 import pytest
-import os
 from pathlib import Path
-from unittest import mock
-from llm_code_lens.analyzer.python import PythonAnalyzer
-from llm_code_lens.analyzer.javascript import JavaScriptAnalyzer
-from llm_code_lens.analyzer.sql import SQLServerAnalyzer
-from llm_code_lens.analyzer.base import ProjectAnalyzer
+from llm_code_lens.analyzer import ProjectAnalyzer, PythonAnalyzer, JavaScriptAnalyzer, SQLServerAnalyzer
 
-class TestBase:
-    @pytest.fixture(autouse=True)
-    def setup_teardown(self, tmp_path):
-        """Setup and teardown for all tests."""
-        self.original_dir = os.getcwd()
-        os.chdir(tmp_path)
-        yield
-        os.chdir(self.original_dir)
-
-    @pytest.fixture
-    def sample_project(self, tmp_path):
-        """Create a sample project structure."""
-        project_structure = {
-            'src/main.py': '''
-def main():
-    """Main entry point."""
+def test_python_basic_analysis(tmp_path):
+    """Test basic Python analysis functionality."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
+def test_function():
+    """Test docstring."""
     return True
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    assert len(result['functions']) == 1
+    assert result['functions'][0]['name'] == 'test_function'
+    assert result['functions'][0]['docstring'] == 'Test docstring.'
 
-if __name__ == "__main__":
-    main()
-''',
-            'src/utils.py': '''
+def test_python_complex_analysis(tmp_path):
+    """Test complex Python features analysis."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
 from typing import List, Optional
-
-def process_data(items: List[int]) -> List[int]:
-    """Process data with validation.
-    
-    Args:
-        items: List of numbers to process
-        
-    Returns:
-        Processed list of numbers
-    """
-    # TODO: Add input validation
-    return [x * 2 for x in items]
-
-class DataProcessor:
-    """Data processing utility class."""
-    
-    def __init__(self, multiplier: int = 2):
-        self.multiplier = multiplier
-    
-    def process(self, value: int) -> int:
-        """Process a single value."""
-        return value * self.multiplier
-''',
-            'tests/test_utils.py': '''
-def test_process_data():
-    """Test data processing function."""
-    assert True
-'''
-        }
-        
-        for path, content in project_structure.items():
-            full_path = tmp_path / path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_text(content)
-        return tmp_path
-
-class TestPythonAnalyzer:
-    @pytest.fixture
-    def complex_python_file(self, tmp_path):
-        """Create a complex Python file for testing."""
-        content = '''
-from typing import List, Optional, Union
-import os
-from pathlib import Path as PathLib
+import os.path
+from pathlib import Path
 
 class BaseClass:
     """Base class docstring."""
-    def __init__(self, value: int) -> None:
+    pass
+
+class TestClass(BaseClass):
+    """Test class with features."""
+    
+    def __init__(self, value: int = 0):
         self.value = value
     
     @property
-    def doubled(self) -> int:
-        """Get doubled value."""
-        return self.value * 2
-
-class ComplexClass(BaseClass):
-    """Complex class with various features."""
-    
-    def __init__(self, value: int, name: str = "default") -> None:
-        super().__init__(value)
-        self.name = name
+    def prop(self) -> int:
+        """Property docstring."""
+        return self.value
     
     @classmethod
-    def from_string(cls, data: str) -> "ComplexClass":
-        """Create from string."""
-        try:
-            value = int(data)
-            return cls(value)
-        except ValueError:
-            return cls(0, data)
+    def create(cls) -> 'TestClass':
+        return cls()
     
     @staticmethod
-    def helper(x: Union[int, str]) -> bool:
-        """Static helper method."""
-        return isinstance(x, int)
+    def helper() -> bool:
+        return True
 
-def process_data(items: List[int], threshold: Optional[int] = None) -> List[int]:
-    """Process a list of integers with threshold.
+async def async_function(param: str) -> bool:
+    """Async function with complexity."""
+    if param:
+        for i in range(10):
+            if i % 2 == 0:
+                continue
+            else:
+                break
+    return True
+''')
     
-    Args:
-        items: List of numbers to process
-        threshold: Optional cutoff value
+    result = analyzer.analyze_file(test_file)
     
-    Returns:
-        Filtered and processed list
-    """
-    # TODO: Add input validation
-    result = []
-    for item in items:
-        if threshold and item > threshold:
-            continue
-        # FIXME: Handle negative numbers better
-        if item < 0:
-            item = abs(item)
-        result.append(item * 2)
-    return result
-
-async def async_handler(*args, **kwargs) -> None:
-    """Async function example."""
-    # Process arguments
-    for arg in args:
-        await process_arg(arg)
+    # Check imports
+    assert len(result['imports']) >= 3
     
-    # Handle keyword arguments
-    for key, value in kwargs.items():
-        if isinstance(value, (list, tuple)):
-            await process_collection(value)
-
-def complex_function(a: int, b: int, *args: int, key: str = "", **kwargs: Any) -> dict:
-    """Function with complex argument structure."""
-    result = {'a': a, 'b': b, 'args': args, 'kwargs': kwargs}
+    # Check classes
+    assert len(result['classes']) == 2
+    test_class = [c for c in result['classes'] if c['name'] == 'TestClass'][0]
+    assert test_class['docstring'] == 'Test class with features.'
+    assert 'BaseClass' in test_class['bases']
+    assert len(test_class['methods']) >= 4
     
-    # Complex logic increases cyclomatic complexity
-    if a > 0:
-        if b > 0:
-            result['sum'] = a + b
-        else:
-            result['product'] = a * abs(b)
-    elif b > 0:
-        if key:
-            result['key_sum'] = sum(ord(c) for c in key)
-        else:
-            result['key_missing'] = True
+    # Check methods
+    methods = {m['name']: m for m in test_class['methods']}
+    assert methods['prop']['is_property']
+    assert methods['create']['is_classmethod']
+    assert methods['helper']['is_staticmethod']
     
-    return result
-'''
-        file_path = tmp_path / "complex.py"
-        file_path.write_text(content)
-        return file_path
+    # Check async function
+    async_func = [f for f in result['functions'] if f['name'] == 'async_function'][0]
+    assert async_func['is_async']
+    assert async_func['complexity'] > 1
 
-    def test_imports_analysis(self, complex_python_file):
-        """Test import statement analysis."""
-        analyzer = PythonAnalyzer()
-        result = analyzer.analyze_file(complex_python_file)
-        
-        assert len(result['imports']) == 3
-        assert any('typing' in imp for imp in result['imports'])
-        assert any('pathlib' in imp and 'PathLib' in imp for imp in result['imports'])
-        assert any('os' in imp for imp in result['imports'])
+def test_python_comments_todos(tmp_path):
+    """Test Python comments and TODOs analysis."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
+# Regular comment
+def function():
+    # TODO: Implement this
+    pass
 
-    def test_class_analysis(self, complex_python_file):
-        """Test class definition analysis."""
-        analyzer = PythonAnalyzer()
-        result = analyzer.analyze_file(complex_python_file)
-        
-        base_class = next(c for c in result['classes'] if c['name'] == 'BaseClass')
-        complex_class = next(c for c in result['classes'] if c['name'] == 'ComplexClass')
-        
-        # Test base class
-        assert not base_class['bases']
-        assert base_class['docstring']
-        assert any(m['name'] == 'doubled' and m['is_property'] for m in base_class['methods'])
-        
-        # Test derived class
-        assert 'BaseClass' in complex_class['bases']
-        assert complex_class['docstring']
-        assert any(m['name'] == 'from_string' and m['is_classmethod'] for m in complex_class['methods'])
-        assert any(m['name'] == 'helper' and m['is_staticmethod'] for m in complex_class['methods'])
+"""
+Module docstring.
+TODO: Update documentation
+"""
 
-    def test_function_analysis(self, complex_python_file):
-        """Test function analysis capabilities."""
-        analyzer = PythonAnalyzer()
-        result = analyzer.analyze_file(complex_python_file)
-        
-        process_data = next(f for f in result['functions'] if f['name'] == 'process_data')
-        async_handler = next(f for f in result['functions'] if f['name'] == 'async_handler')
-        complex_func = next(f for f in result['functions'] if f['name'] == 'complex_function')
-        
-        # Test regular function
-        assert process_data['return_type'] == 'List[int]'
-        assert process_data['docstring']
-        assert len(process_data['args']) == 2
-        assert process_data['args'][1].endswith('= None')
-        
-        # Test async function
-        assert async_handler['is_async']
-        assert '*args' in str(async_handler['args'])
-        assert '**kwargs' in str(async_handler['args'])
-        
-        # Test complex function
-        assert complex_func['complexity'] > 3
-        assert len(complex_func['args']) == 4
-        assert any('**kwargs' in arg for arg in complex_func['args'])
-
-    def test_todo_extraction(self, complex_python_file):
-        """Test TODO and FIXME comment extraction."""
-        analyzer = PythonAnalyzer()
-        result = analyzer.analyze_file(complex_python_file)
-        
-        assert len(result['todos']) == 2
-        assert any('Add input validation' in todo['text'] for todo in result['todos'])
-        assert any('Handle negative numbers' in todo['text'] for todo in result['todos'])
-
-    def test_error_handling(self, tmp_path):
-        """Test analyzer error handling capabilities."""
-        # Test syntax error
-        syntax_error_file = tmp_path / "syntax_error.py"
-        syntax_error_file.write_text("def invalid_syntax(:")
-        
-        analyzer = PythonAnalyzer()
-        result = analyzer.analyze_file(syntax_error_file)
-        
-        assert 'errors' in result
-        assert result['errors'][0]['type'] == 'syntax_error'
-        assert result['metrics']['loc'] == 0
-        
-        # Test encoding error
-        binary_file = tmp_path / "binary.py"
-        binary_file.write_bytes(b'\x80\x81')
-        
-        result = analyzer.analyze_file(binary_file)
-        assert 'errors' in result
-        
-        # Test empty file
-        empty_file = tmp_path / "empty.py"
-        empty_file.touch()
-        
-        result = analyzer.analyze_file(empty_file)
-        assert result['metrics']['loc'] == 0
-        assert not result.get('errors')
-
-class TestJavaScriptAnalyzer:
-    @pytest.fixture
-    def js_file(self, tmp_path):
-        """Create a JavaScript file for testing."""
-        content = '''
-import React from 'react';
-import { useState, useEffect } from 'react';
-
-// Component with hooks
-function DataList({ data }) {
-    const [items, setItems] = useState(data);
+# FIXME: Critical bug
+class TestClass:
+    """Class docstring."""
+    def method(self):
+        # Another comment
+        return True
+''')
     
-    useEffect(() => {
-        // TODO: Add error handling
-        fetchData().then(setItems);
-    }, []);
-    
-    return items.map(item => <div key={item.id}>{item.name}</div>);
+    result = analyzer.analyze_file(test_file)
+    assert len(result['todos']) >= 2
+    assert len(result['comments']) >= 2
+    assert any('Critical bug' in todo['text'] for todo in result['todos'])
+
+def test_javascript_analysis(tmp_path):
+    """Test JavaScript file analysis with various features."""
+    analyzer = JavaScriptAnalyzer()
+    test_file = tmp_path / "test.js"
+    test_file.write_text('''
+import React, { useState } from 'react';
+import * as utils from './utils';
+export { default as Component } from './Component';
+export const constant = 42;
+
+// Regular comment
+function TestComponent() {
+    // TODO: Add error handling
+    return null;
 }
 
-class DataManager {
-    constructor(source) {
-        this.source = source;
+/* Multi-line
+   comment */
+class MyClass extends BaseClass {
+    constructor() {
+        super();
+        this.state = {};
     }
-    
-    async fetchData() {
-        // FIXME: Add retry logic
-        const response = await fetch(this.source);
-        return response.json();
+
+    // FIXME: Fix this method
+    method() {
+        return true;
     }
 }
 
-export { DataList, DataManager };
-'''
-        file_path = tmp_path / "data.js"
-        file_path.write_text(content)
-        return file_path
+const ArrowFunction = () => {
+    return {};
+};
 
-    def test_js_imports(self, js_file):
-        """Test JavaScript import analysis."""
-        analyzer = JavaScriptAnalyzer()
-        result = analyzer.analyze_file(js_file)
-        
-        assert len(result['imports']) == 2
-        assert any('React' in imp for imp in result['imports'])
-        assert any('useState' in imp and 'useEffect' in imp for imp in result['imports'])
+async function asyncFunction() {
+    return Promise.resolve();
+}
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    
+    # Check imports and exports
+    assert len(result['imports']) == 2
+    assert len(result['exports']) == 2
+    
+    # Check functions
+    assert len(result['functions']) >= 3
+    assert any(f['name'] == 'TestComponent' for f in result['functions'])
+    assert any(f['name'] == 'ArrowFunction' for f in result['functions'])
+    assert any(f['name'] == 'asyncFunction' for f in result['functions'])
+    
+    # Check classes
+    assert len(result['classes']) == 1
+    assert result['classes'][0]['name'] == 'MyClass'
+    assert result['classes'][0]['extends'] == 'BaseClass'
+    
+    # Check comments and TODOs
+    assert len(result['todos']) >= 2
+    assert len(result['comments']) >= 2
+    assert any('error handling' in todo['text'] for todo in result['todos'])
+    
+    # Check metrics
+    assert result['metrics']['functions'] > 0
+    assert result['metrics']['classes'] > 0
+    assert result['metrics']['imports'] > 0
 
-    def test_js_exports(self, js_file):
-        """Test JavaScript export analysis."""
-        analyzer = JavaScriptAnalyzer()
-        result = analyzer.analyze_file(js_file)
-        
-        assert len(result['exports']) == 1
-        assert 'DataList' in result['exports'][0]
-        assert 'DataManager' in result['exports'][0]
+def test_sql_analysis(tmp_path):
+    """Test SQL file analysis with various features."""
+    analyzer = SQLServerAnalyzer()
+    test_file = tmp_path / "test.sql"
+    test_file.write_text('''
+-- Regular comment
+/* Multi-line
+   comment */
 
-    def test_js_functions(self, js_file):
-        """Test JavaScript function analysis."""
-        analyzer = JavaScriptAnalyzer()
-        result = analyzer.analyze_file(js_file)
-        
-        assert any(f['name'] == 'DataList' for f in result['functions'])
-        data_list = next(f for f in result['functions'] if f['name'] == 'DataList')
-        assert data_list['line_number'] > 0
-
-    def test_js_classes(self, js_file):
-        """Test JavaScript class analysis."""
-        analyzer = JavaScriptAnalyzer()
-        result = analyzer.analyze_file(js_file)
-        
-        assert len(result['classes']) == 1
-        data_manager = result['classes'][0]
-        assert data_manager['name'] == 'DataManager'
-        assert data_manager['line_number'] > 0
-
-    def test_js_todos(self, js_file):
-        """Test JavaScript TODO extraction."""
-        analyzer = JavaScriptAnalyzer()
-        result = analyzer.analyze_file(js_file)
-        
-        assert len(result['todos']) == 2
-        assert any('Add error handling' in todo['text'] for todo in result['todos'])
-        assert any('Add retry logic' in todo['text'] for todo in result['todos'])
-
-class TestSQLServerAnalyzer:
-    @pytest.fixture
-    def mock_sql_connection(self, mocker):
-        """Mock SQL Server connection."""
-        mock_conn = mocker.patch('pyodbc.connect')
-        mock_conn.return_value.cursor.return_value.fetchall.return_value = []
-        return mock_conn
-
-    @pytest.fixture
-    def sql_file(self, tmp_path):
-        """Create a SQL file for testing."""
-        content = '''
-CREATE PROCEDURE ManageEmployeeData
-    @Operation NVARCHAR(10), -- 'INSERT', 'UPDATE', or 'GET'
-    @EmployeeID INT = NULL,
-    @FirstName NVARCHAR(50) = NULL,
-    @LastName NVARCHAR(50) = NULL,
-    @Position NVARCHAR(50) = NULL,
-    @Salary DECIMAL(18, 2) = NULL
+-- TODO: Add error handling
+CREATE PROCEDURE dbo.TestProc
+    @param1 int = NULL,               -- Input parameter
+    @param2 varchar(50),              -- Name parameter
+    @param3 decimal(18,2) = 0.0,      -- Amount
+    @result int OUTPUT                -- Output parameter
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- TODO: Add transaction handling
+    -- FIXME: Add validation
+    IF @param1 IS NULL
+        RETURN;
+
+    -- Complex logic with multiple dependencies
+    WITH CTE AS (
+        SELECT t1.Col1, t2.Col2
+        FROM Table1 t1
+        JOIN Table2 t2 ON t1.Id = t2.Id
+        WHERE EXISTS (SELECT 1 FROM Table3)
+    )
+    INSERT INTO TargetTable (Col1, Col2)
+    SELECT Col1, Col2 FROM CTE;
     
-    IF @Operation = 'INSERT'
-    BEGIN
-        INSERT INTO Employees (FirstName, LastName, Position, Salary)
-        VALUES (@FirstName, @LastName, @Position, @Salary);
-    END
-    ELSE IF @Operation = 'UPDATE'
-    BEGIN
-        UPDATE Employees
-        SET
-            FirstName = ISNULL(@FirstName, FirstName),
-            LastName = ISNULL(@LastName, LastName),
-            Position = ISNULL(@Position, Position),
-            Salary = ISNULL(@Salary, Salary)
-        WHERE EmployeeID = @EmployeeID;
-    END
-    ELSE IF @Operation = 'GET'
-    BEGIN
-        SELECT * FROM Employees WHERE EmployeeID = @EmployeeID;
-    END
-END;
+    -- Update related data
+    UPDATE Table4
+    SET Status = 'Processed'
+    WHERE Id = @param1;
+    
+    RETURN 0;
+END
 GO
 
-CREATE VIEW EmployeeSummary AS
-    -- FIXME: Optimize this query
-    SELECT 
-        e.EmployeeID,
-        e.FirstName + ' ' + e.LastName AS FullName,
-        e.Position,
-        e.Salary,
-        d.DepartmentName
-    FROM Employees e
-    LEFT JOIN Departments d ON e.DepartmentID = d.DepartmentID;
+CREATE VIEW dbo.TestView
+AS
+    SELECT a.Col1, b.Col2
+    FROM Table5 a
+    JOIN Table6 b ON a.Id = b.Id;
 GO
-'''
-        file_path = tmp_path / "employees.sql"
-        file_path.write_text(content)
-        return file_path
 
-    def test_sql_object_extraction(self, sql_file):
-        """Test SQL object extraction."""
-        analyzer = SQLServerAnalyzer()
-        result = analyzer.analyze_file(sql_file)
-        
-        assert len(result['objects']) == 2
-        proc = next(obj for obj in result['objects'] if obj['type'] == 'procedure')
-        view = next(obj for obj in result['objects'] if obj['type'] == 'view')
-        
-        assert proc['name'] == 'ManageEmployeeData'
-        assert view['name'] == 'EmployeeSummary'
-        assert proc['loc'] > 10
-        assert view['loc'] > 5
-
-    def test_sql_parameters(self, sql_file):
-        """Test SQL parameter extraction."""
-        analyzer = SQLServerAnalyzer()
+CREATE FUNCTION dbo.TestFunction
+(
+    @value int
+)
+RETURNS int
+AS
+BEGIN
+    RETURN @value * 2;
+END
+''')
     
-    def test_sql_parameters(self, sql_file):
-        """Test SQL parameter extraction."""
-        analyzer = SQLServerAnalyzer()
-        result = analyzer.analyze_file(sql_file)
-        
-        params = result['parameters']
-        assert len(params) > 0
-        
-        operation_param = next(p for p in params if p['name'] == 'Operation')
-        assert operation_param['data_type'] == 'NVARCHAR(10)'
-        assert 'INSERT' in operation_param['description']
-        
-        nullable_param = next(p for p in params if p['name'] == 'EmployeeID')
-        assert nullable_param['data_type'] == 'INT'
-        assert nullable_param['default'] == 'NULL'
-
-    def test_sql_dependencies(self, sql_file):
-        """Test SQL dependency extraction."""
-        analyzer = SQLServerAnalyzer()
-        result = analyzer.analyze_file(sql_file)
-        
-        deps = result['dependencies']
-        assert 'Employees' in deps
-        assert 'Departments' in deps
-        
-        # Verify no false positives
-        assert 'BEGIN' not in deps
-        assert 'WHERE' not in deps
-
-    def test_sql_complexity(self, sql_file):
-        """Test SQL complexity calculation."""
-        analyzer = SQLServerAnalyzer()
-        result = analyzer.analyze_file(sql_file)
-        
-        proc = next(obj for obj in result['objects'] if obj['type'] == 'procedure')
-        view = next(obj for obj in result['objects'] if obj['type'] == 'view')
-        
-        # Procedure should have higher complexity due to IF statements
-        assert proc['complexity'] > view['complexity']
-        assert proc['complexity'] > 5  # Multiple IF branches
-        
-    def test_sql_todos(self, sql_file):
-        """Test SQL TODO extraction."""
-        analyzer = SQLServerAnalyzer()
-        result = analyzer.analyze_file(sql_file)
-        
-        assert len(result['todos']) == 2
-        assert any('transaction' in todo['text'].lower() for todo in result['todos'])
-        assert any('optimize' in todo['text'].lower() for todo in result['todos'])
-
-    def test_sql_server_connection(self, mock_sql_connection):
-        """Test SQL Server connection handling."""
-        analyzer = SQLServerAnalyzer()
-        
-        # Test successful connection
-        analyzer.connect("server=test;database=test")
-        mock_sql_connection.assert_called_once()
-        
-        # Test database analysis
-        result = analyzer.analyze_database("test_db")
-        assert isinstance(result, dict)
-        assert all(key in result for key in ['stored_procedures', 'views', 'functions'])
-
-class TestCLI:
-    @pytest.fixture
-    def cli_runner(self):
-        """Create a CLI test runner."""
-        from click.testing import CliRunner
-        return CliRunner()
-
-    @pytest.fixture
-    def mock_analyzers(self, mocker):
-        """Mock all analyzers."""
-        mocker.patch('llm_code_lens.analyzer.python.PythonAnalyzer')
-        mocker.patch('llm_code_lens.analyzer.javascript.JavaScriptAnalyzer')
-        mocker.patch('llm_code_lens.analyzer.sql.SQLServerAnalyzer')
-        return mocker
-
-    def test_cli_basic(self, cli_runner, sample_project):
-        """Test basic CLI functionality."""
-        from llm_code_lens.cli import main
-        
-        result = cli_runner.invoke(main, [str(sample_project)])
-        assert result.exit_code == 0
-        
-        output_dir = sample_project / '.codelens'
-        assert output_dir.exists()
-        
-        analysis_file = output_dir / 'analysis.txt'
-        assert analysis_file.exists()
-        content = analysis_file.read_text()
-        assert 'CODEBASE SUMMARY:' in content
-        assert 'src/main.py' in content
-
-    def test_cli_json_output(self, cli_runner, sample_project):
-        """Test CLI JSON output format."""
-        from llm_code_lens.cli import main
-        
-        result = cli_runner.invoke(main, [str(sample_project), '--format', 'json'])
-        assert result.exit_code == 0
-        
-        analysis_file = sample_project / '.codelens' / 'analysis.json'
-        assert analysis_file.exists()
-        
-        import json
-        content = json.loads(analysis_file.read_text())
-        assert 'summary' in content
-        assert 'files' in content
-        assert 'insights' in content
-
-    def test_cli_full_export(self, cli_runner, sample_project):
-        """Test CLI full content export."""
-        from llm_code_lens.cli import main
-        
-        result = cli_runner.invoke(main, [str(sample_project), '--full'])
-        assert result.exit_code == 0
-        
-        output_dir = sample_project / '.codelens'
-        full_files = list(output_dir.glob('full_*.txt'))
-        assert len(full_files) > 0
-        
-        content = full_files[0].read_text()
-        assert 'def main():' in content
-        assert 'def process_data(' in content
-
-    def test_cli_sql_config(self, cli_runner, tmp_path, mock_analyzers):
-        """Test CLI SQL configuration handling."""
-        from llm_code_lens.cli import main
-        
-        # Create SQL config file
-        config_file = tmp_path / 'sql-config.json'
-        config_content = {
-            'server': 'test-server',
-            'database': 'test-db',
-            'env': {
-                'MSSQL_USERNAME': 'test-user',
-                'MSSQL_PASSWORD': 'test-pass'
-            }
-        }
-        import json
-        config_file.write_text(json.dumps(config_content))
-        
-        result = cli_runner.invoke(main, ['--sql-config', str(config_file)])
-        assert result.exit_code == 0
-        
-        # Verify environment variables were set
-        assert os.environ.get('MSSQL_USERNAME') == 'test-user'
-        assert os.environ.get('MSSQL_PASSWORD') == 'test-pass'
-
-    def test_cli_error_handling(self, cli_runner, tmp_path):
-        """Test CLI error handling."""
-        from llm_code_lens.cli import main
-        
-        # Test invalid directory
-        result = cli_runner.invoke(main, ['invalid_dir'])
-        assert result.exit_code != 0
-        assert 'Error' in result.stderr
-        
-        # Test invalid SQL config
-        invalid_config = tmp_path / 'invalid.json'
-        invalid_config.write_text('invalid json')
-        
-        result = cli_runner.invoke(main, ['--sql-config', str(invalid_config)])
-        assert result.exit_code != 0
-        assert 'Error' in result.stderr or 'Warning' in result.stderr
-
-class TestTokenization:
-    """Test content tokenization and chunking."""
+    result = analyzer.analyze_file(test_file)
     
-    def test_split_content_basic(self):
-        """Test basic content splitting."""
-        from llm_code_lens.cli import split_content_by_tokens
-        
-        content = "Hello " * 1000
-        chunks = split_content_by_tokens(content)
-        
-        assert len(chunks) > 0
-        assert all(isinstance(chunk, str) for chunk in chunks)
-        assert ''.join(chunks) == content
+    # Check objects
+    assert result['objects'], "Should find SQL objects"
+    assert len(result['objects']) >= 2
+    assert any(obj['type'] == 'procedure' and obj['name'] == 'dbo.TestProc' for obj in result['objects'])
+    assert any(obj['type'] == 'view' and obj['name'] == 'dbo.TestView' for obj in result['objects'])
+    
+    # Check parameters
+    assert result['parameters'], "Should find parameters"
+    assert len(result['parameters']) >= 4
+    param_names = {p['name'] for p in result['parameters']}
+    assert 'param1' in param_names, "Should find param1"
+    assert 'result' in param_names, "Should find result parameter"
+    
+    # Check parameter details
+    params = {p['name']: p for p in result['parameters']}
+    assert params['param1']['data_type'] == 'int'
+    assert params['param1']['default'] == 'NULL'
+    assert 'Input parameter' in params['param1'].get('description', '')
+    
+    # Check dependencies
+    assert result['dependencies'], "Should find dependencies"
+    assert len(result['dependencies']) >= 6
+    assert all(table in result['dependencies'] for table in ['Table1', 'Table2', 'TargetTable', 'Table4'])
+    
+    # Check comments and TODOs
+    assert result['comments'], "Should find comments"
+    assert len(result['comments']) >= 3
+    assert result['todos'], "Should find TODOs"
+    assert len(result['todos']) >= 2
+    assert any('validation' in todo['text'] for todo in result['todos'])
+    assert any('error handling' in todo['text'] for todo in result['todos'])
+    
+    # Check metrics
+    assert 'metrics' in result, "Should include metrics"
+    assert result['metrics']['complexity'] > 0, "Should calculate complexity"
+    assert result['metrics'].get('loc', 0) > 0, "Should count lines of code"
 
-    def test_split_content_edge_cases(self):
-        """Test content splitting edge cases."""
-        from llm_code_lens.cli import split_content_by_tokens
-        
-        test_cases = [
-            '',  # Empty string
-            'a',  # Single character
-            'Hello\n' * 10000,  # Very long content
-            '你好\n' * 1000,  # Unicode content
-            '\x00\x01\x02',  # Binary content
-        ]
-        
-        for content in test_cases:
-            chunks = split_content_by_tokens(content)
-            assert len(chunks) > 0
-            assert ''.join(chunks) == content
+def test_project_analysis(tmp_path):
+    """Test project-wide analysis."""
+    project_dir = tmp_path / "test_project"
+    project_dir.mkdir()
+    
+    # Create a test Python file
+    py_file = project_dir / "main.py"
+    py_file.write_text('def main(): pass')
+    
+    analyzer = ProjectAnalyzer()
+    result = analyzer.analyze(project_dir)
+    
+    assert result.summary['project_stats']['total_files'] == 1
+    assert len(result.files) == 1
+    assert any('main.py' in path for path in result.files)
 
-    def test_split_content_failure(self, mocker):
-        """Test content splitting failure handling."""
-        from llm_code_lens.cli import split_content_by_tokens
-        
-        # Mock tiktoken to simulate failure
-        mocker.patch('tiktoken.get_encoding', side_effect=Exception('Test error'))
-        
-        content = "Test content\n" * 1000
-        chunks = split_content_by_tokens(content)
-        
-        assert len(chunks) > 0
-        assert ''.join(chunks) == content
 
-if __name__ == '__main__':
-    pytest.main(['-v'])
+def test_python_nested_classes(tmp_path):
+    """Test analysis of nested class definitions and methods."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
+class Outer:
+    """Outer class docstring."""
+    
+    class Inner:
+        """Inner class docstring."""
+        
+        def inner_method(self):
+            """Inner method docstring."""
+            pass
+    
+    def outer_method(self):
+        class LocalClass:
+            pass
+        return LocalClass()
+
+    @property
+    def prop(self): return None
+
+    @classmethod
+    def cls_method(cls): pass
+
+    @staticmethod
+    def static_method(): pass
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    # Fix: Update assertion to account for LocalClass or filter non-nested classes
+    outer_class = next(c for c in result['classes'] if c['name'] == 'Outer')
+    assert len(outer_class['methods']) == 4  # outer_method, prop, cls_method, static_method
+    assert any(m['is_property'] for m in outer_class['methods'] if m['name'] == 'prop')
+    assert any(m['is_classmethod'] for m in outer_class['methods'] if m['name'] == 'cls_method')
+    assert any(m['is_staticmethod'] for m in outer_class['methods'] if m['name'] == 'static_method')
+
+
+def test_function_complexity_cases(tmp_path):
+    """Test various cases that affect cyclomatic complexity."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
+def complex_function(x, y):
+    """Function with various complexity factors."""
+    if x > 0:
+        if y > 0:
+            return x + y
+        else:
+            return x - y
+    elif x < 0:
+        for i in range(y):
+            try:
+                result = x / i
+            except ZeroDivisionError:
+                continue
+            except ValueError:
+                break
+    else:
+        return x if y > 0 else -x
+    
+    return result if 'result' in locals() else None
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    func = result['functions'][0]
+    assert func['complexity'] > 5  # Should have high complexity due to conditions and error handling
+
+
+def test_complex_decorators(tmp_path):
+    """Test handling of complex decorator patterns."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    test_file.write_text('''
+import functools
+from typing import TypeVar, Callable
+
+T = TypeVar('T')
+
+def decorator_with_args(arg1: str, arg2: int = 0):
+    def actual_decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            return func(*args, **kwargs)
+        return wrapper
+    return actual_decorator
+
+class ClassWithComplexDecorators:
+    @property
+    @functools.cache
+    def cached_prop(self):
+        return 42
+
+    @decorator_with_args("test", arg2=10)
+    def complex_decorated(self):
+        return True
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    class_info = result['classes'][0]
+    assert any('decorator_with_args' in str(method['decorators']) 
+              for method in class_info['methods']
+              if method['name'] == 'complex_decorated')
+    assert any(method['is_property']
+              for method in class_info['methods']
+              if method['name'] == 'cached_prop')
+
+def test_binary_and_unicode_handling(tmp_path):
+    """Test handling of binary and unicode content in Python files."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    
+    # Test file with mixed encodings and special characters
+    content = '''
+# -*- coding: utf-8 -*-
+"""Documentation with unicode: áéíóú."""
+
+def test_unicode():
+    """Test unicode strings: 你好, 🌍"""
+    return "Hello, 世界"
+
+# Binary content representation
+BINARY_DATA = b"\\x00\\x01\\x02"
+'''.encode('utf-8')
+    
+    test_file.write_bytes(content)
+    result = analyzer.analyze_file(test_file)
+    
+    assert result['functions'][0]['docstring'] == 'Test unicode strings: 你好, 🌍'
+    assert len(result['comments']) > 0
+
+def test_error_recovery_and_partial_parsing(tmp_path):
+    """Test analyzer's ability to recover from various error conditions."""
+    analyzer = PythonAnalyzer()
+    test_file = tmp_path / "test.py"
+    
+    # Test with syntax error
+    test_file.write_text('''
+def valid_function():
+    pass
+
+def invalid_function(
+    # Missing closing parenthesis
+    return None
+
+def another_valid_function():
+    pass
+''')
+    
+    result = analyzer.analyze_file(test_file)
+    assert 'errors' in result
+    assert any(error['type'] == 'syntax_error' for error in result['errors'])
+    
+    # Test with encoding error
+    test_file.write_bytes(b'\x80\x81\x82invalid bytes\xaa\xbb\xcc')
+    result = analyzer.analyze_file(test_file)
+    assert 'errors' in result

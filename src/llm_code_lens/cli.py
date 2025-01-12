@@ -6,7 +6,7 @@ Handles command-line interface and coordination of analysis components.
 
 import click
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 from rich.console import Console
 from .analyzer.base import ProjectAnalyzer, AnalysisResult
 from .analyzer.sql import SQLServerAnalyzer
@@ -14,6 +14,7 @@ import tiktoken
 import traceback
 import os
 import json
+import shutil
 
 console = Console()
 
@@ -35,12 +36,30 @@ def parse_ignore_file(ignore_file: Path) -> List[str]:
 
     return patterns
 
-def should_ignore(path: Path, ignore_patterns: List[str]) -> bool:
+def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bool:
     """Determine if a file or directory should be ignored based on patterns."""
-    for pattern in ignore_patterns:
-        if pattern in str(path):
+    if ignore_patterns is None:
+        ignore_patterns = []
+        
+    path_str = str(path)
+    default_ignores = {
+        '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
+        'node_modules', 'venv', 'env', 'dist', 'build', '.tox', 'htmlcov'
+    }
+    
+    # Check default ignores
+    for pattern in default_ignores:
+        if pattern in path_str:
             return True
+    
+    # Check custom ignore patterns
+    for pattern in ignore_patterns:
+        if pattern in path_str:
+            return True
+            
     return False
+
+
 
 def is_binary(file_path: Path) -> bool:
     """Check if a file is binary."""
@@ -56,42 +75,76 @@ def is_binary(file_path: Path) -> bool:
 def split_content_by_tokens(content: str, chunk_size: int = 100000) -> List[str]:
     """
     Split content into chunks based on token count.
-    Falls back to line-based splitting if token splitting fails.
+    Handles large content safely by pre-chunking before tokenization.
+    
+    Args:
+        content (str): The content to split
+        chunk_size (int): Target size for each chunk in tokens
+        
+    Returns:
+        List[str]: List of content chunks
     """
+    if not content:
+        return ['']
+        
     try:
+        # First do a rough pre-chunking by characters to avoid stack overflow
+        MAX_CHUNK_CHARS = 100000  # Adjust this based on your needs
+        rough_chunks = []
+        
+        for i in range(0, len(content), MAX_CHUNK_CHARS):
+            rough_chunks.append(content[i:i + MAX_CHUNK_CHARS])
+            
         encoder = tiktoken.get_encoding("cl100k_base")
-        tokens = encoder.encode(content)
-
-        # Split into chunks
-        chunks = []
-        for i in range(0, len(tokens), chunk_size):
-            chunk_tokens = tokens[i:i + chunk_size]
-            chunk_content = encoder.decode(chunk_tokens)
-            chunks.append(chunk_content)
-
-        return chunks
+        final_chunks = []
+        
+        # Process each rough chunk
+        for rough_chunk in rough_chunks:
+            tokens = encoder.encode(rough_chunk)
+            
+            # Split into smaller chunks based on token count
+            for i in range(0, len(tokens), chunk_size):
+                chunk_tokens = tokens[i:i + chunk_size]
+                chunk_content = encoder.decode(chunk_tokens)
+                final_chunks.append(chunk_content)
+                
+        return final_chunks
+        
     except Exception as e:
-        console.print(f"[yellow]Warning during token splitting: {str(e)}[/]")
-        # Fallback to simple line-based splitting
-        lines = content.splitlines()
-        chunks = []
-        current_chunk = []
-        current_size = 0
+        # Fallback to line-based splitting
+        return _split_by_lines(content, max_chunk_size=chunk_size)
 
-        for line in lines:
-            line_size = len(line.encode('utf-8'))
-            if current_size + line_size > 4000:
-                chunks.append('\n'.join(current_chunk))
-                current_chunk = [line]
-                current_size = line_size
-            else:
-                current_chunk.append(line)
-                current_size += line_size
+def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
+    """Split content by lines with a maximum chunk size."""
+    lines = content.splitlines(keepends=True)  # Keep line endings
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    
+    for line in lines:
+        line_size = len(line.encode('utf-8'))
+        if current_size + line_size > max_chunk_size and current_chunk:
+            chunks.append(''.join(current_chunk))
+            current_chunk = [line]
+            current_size = line_size
+        else:
+            current_chunk.append(line)
+            current_size += line_size
+    
+    if current_chunk:
+        chunks.append(''.join(current_chunk))
+        
+    # Handle special case where we got no chunks
+    if not chunks and content:
+        return [content]  # Return entire content as one chunk
+        
+    return chunks
 
-        if current_chunk:
-            chunks.append('\n'.join(current_chunk))
-
-        return chunks
+def delete_and_create_output_dir(output_dir: Path) -> None:
+    """Delete the output directory if it exists and recreate it."""
+    if output_dir.exists() and output_dir.is_dir():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
 def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]) -> None:
     """Export full content of all files in separate token-limited files."""
@@ -111,7 +164,7 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
     full_content = "\n".join(file_content)
 
     # Split and write content
-    chunks = split_content_by_tokens(full_content)
+    chunks = split_content_by_tokens(full_content, chunk_size=100000)
     for i, chunk in enumerate(chunks, 1):
         output_file = output_dir / f'full_{i}.txt'
         try:
@@ -154,7 +207,7 @@ FUNCTION: [{func['schema']}].[{func['name']}]
     # Split and write content
     if file_content:
         full_content = "\n".join(file_content)
-        chunks = split_content_by_tokens(full_content)
+        chunks = split_content_by_tokens(full_content, chunk_size=100000)
 
         for i, chunk in enumerate(chunks, 1):
             output_file = output_dir / f'sql_full_{i}.txt'
@@ -163,6 +216,50 @@ FUNCTION: [{func['schema']}].[{func['name']}]
                 console.print(f"[green]Created SQL content file: {output_file}[/]")
             except Exception as e:
                 console.print(f"[yellow]Warning: Error writing {output_file}: {str(e)}[/]")
+
+def _combine_fs_results(combined: dict, result: Union[dict, AnalysisResult]) -> None:
+    """Combine file system analysis results."""
+    if isinstance(result, AnalysisResult):
+        result_dict = result.dict()  # Convert AnalysisResult to dict
+    else:
+        result_dict = result  # Already a dict
+
+    # Update project stats
+    stats = result_dict.get('summary', {}).get('project_stats', {})
+    combined['summary']['project_stats']['total_files'] += stats.get('total_files', 0)
+    combined['summary']['project_stats']['lines_of_code'] += stats.get('lines_of_code', 0)
+
+    # Update code metrics
+    metrics = result_dict.get('summary', {}).get('code_metrics', {})
+    for metric_type in ['functions', 'classes']:
+        if metric_type in metrics:
+            for key in ['count', 'with_docs', 'complex']:
+                if key in metrics[metric_type]:
+                    combined['summary']['code_metrics'][metric_type][key] += metrics[metric_type][key]
+
+    # Update imports
+    if 'imports' in metrics:
+        combined['summary']['code_metrics']['imports']['count'] += metrics['imports'].get('count', 0)
+        unique_imports = metrics['imports'].get('unique', set())
+        if isinstance(unique_imports, (set, list)):
+            combined['summary']['code_metrics']['imports']['unique'].update(unique_imports)
+
+    # Update maintenance info
+    maintenance = result_dict.get('summary', {}).get('maintenance', {})
+    combined['summary']['maintenance']['todos'].extend(maintenance.get('todos', []))
+    
+    # Update structure info
+    structure = result_dict.get('summary', {}).get('structure', {})
+    if 'directories' in structure:
+        dirs = structure['directories']
+        if isinstance(dirs, (set, list)):
+            combined['summary']['structure']['directories'].update(dirs)
+
+    # Update insights and files
+    if 'insights' in result_dict:
+        combined['insights'].extend(result_dict['insights'])
+    if 'files' in result_dict:
+        combined['files'].update(result_dict['files'])
 
 def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResult:
     """Combine multiple analysis results into a single result."""
@@ -176,24 +273,10 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
                 'avg_file_size': 0
             },
             'code_metrics': {
-                'functions': {
-                    'count': 0,
-                    'with_docs': 0,
-                    'complex': 0
-                },
-                'classes': {
-                    'count': 0,
-                    'with_docs': 0
-                },
-                'sql_objects': {
-                    'procedures': 0,
-                    'views': 0,
-                    'functions': 0
-                },
-                'imports': {
-                    'count': 0,
-                    'unique': set()
-                }
+                'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
+                'classes': {'count': 0, 'with_docs': 0},
+                'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
+                'imports': {'count': 0, 'unique': set()}
             },
             'maintenance': {
                 'todos': [],
@@ -212,10 +295,16 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
     }
 
     for result in results:
-        if isinstance(result, AnalysisResult):
-            _combine_fs_results(combined, result)
-        else:
+        if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
             _combine_sql_results(combined, result)
+        else:
+            # If result is AnalysisResult, convert to dict using to_json and json.loads
+            if isinstance(result, AnalysisResult):
+                import json
+                result_dict = json.loads(result.to_json())
+            else:
+                result_dict = result
+            _combine_fs_results(combined, result_dict)
 
     # Calculate final metrics
     total_items = (combined['summary']['project_stats']['total_files'] +
@@ -234,194 +323,32 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
         combined['summary']['structure']['directories']
     )
 
-    # Calculate documentation coverage
-    total_items = (combined['summary']['code_metrics']['functions']['count'] +
-                  combined['summary']['code_metrics']['classes']['count'])
-    if total_items > 0:
-        docs = (combined['summary']['code_metrics']['functions']['with_docs'] +
-               combined['summary']['code_metrics']['classes']['with_docs'])
-        combined['summary']['maintenance']['doc_coverage'] = (docs / total_items) * 100
-
     return AnalysisResult(**combined)
 
-def _combine_fs_results(combined: dict, result: AnalysisResult) -> None:
-    """Combine file system analysis results."""
-    # Update project stats
-    combined['summary']['project_stats']['total_files'] += (
-        result.summary['project_stats']['total_files']
-    )
-    combined['summary']['project_stats']['lines_of_code'] += (
-        result.summary['project_stats']['lines_of_code']
-    )
 
-    # Merge file types
-    for ext, count in result.summary['project_stats']['by_type'].items():
-        combined['summary']['project_stats']['by_type'][ext] = (
-            combined['summary']['project_stats']['by_type'].get(ext, 0) + count
-        )
-
-    # Update code metrics
-    metrics = result.summary.get('code_metrics', {})
-    for metric_type in ['functions', 'classes']:
-        if metric_type in metrics:
-            # Update counts
-            combined['summary']['code_metrics'][metric_type]['count'] += (
-                metrics[metric_type].get('count', 0)
-            )
-            # Update documented counts
-            combined['summary']['code_metrics'][metric_type]['with_docs'] += (
-                metrics[metric_type].get('with_docs', 0)
-            )
-            # Handle complex metric for functions
-            if metric_type == 'functions':
-                combined['summary']['code_metrics']['functions']['complex'] += (
-                    metrics[metric_type].get('complex', 0)
-                )
-
-    # Update imports
-    if 'imports' in metrics:
-        combined['summary']['code_metrics']['imports']['count'] += metrics['imports'].get('count', 0)
-        if 'unique' in metrics['imports']:
-            combined['summary']['code_metrics']['imports']['unique'].update(
-                metrics['imports']['unique']
-            )
-
-    # Update maintenance info
-    if 'maintenance' in result.summary:
-        if 'todos' in result.summary['maintenance']:
-            combined['summary']['maintenance']['todos'].extend(
-                result.summary['maintenance']['todos']
-            )
-
-    # Update structure info
-    if 'structure' in result.summary:
-        structure = result.summary['structure']
-        if 'directories' in structure:
-            combined['summary']['structure']['directories'].update(
-                structure['directories']
-            )
-        if 'entry_points' in structure:
-            combined['summary']['structure']['entry_points'].extend(
-                structure['entry_points']
-            )
-        if 'core_files' in structure:
-            combined['summary']['structure']['core_files'].extend(
-                structure['core_files']
-            )
-
-    # Merge insights and files
-    combined['insights'].extend(result.insights)
-    combined['files'].update(result.files)
-
-def _combine_sql_results(combined: dict, result: dict) -> None:
-    """Combine SQL analysis results."""
-    # Update SQL object counts
-    proc_count = len(result.get('stored_procedures', []))
-    view_count = len(result.get('views', []))
-    func_count = len(result.get('functions', []))
-
-    combined['summary']['project_stats']['total_sql_objects'] += (
-        proc_count + view_count + func_count
-    )
-
+def _combine_sql_results(combined: dict, sql_result: dict) -> None:
+    """Combine SQL results with proper object counting."""
+    # Count objects
+    proc_count = len(sql_result.get('stored_procedures', []))
+    view_count = len(sql_result.get('views', []))
+    func_count = len(sql_result.get('functions', []))
+    
+    # Update stats
+    combined['summary']['project_stats']['total_sql_objects'] += proc_count + view_count + func_count
     combined['summary']['code_metrics']['sql_objects']['procedures'] += proc_count
     combined['summary']['code_metrics']['sql_objects']['views'] += view_count
     combined['summary']['code_metrics']['sql_objects']['functions'] += func_count
+    
+    # Add objects to files
+    for proc in sql_result.get('stored_procedures', []):
+        key = f"stored_proc_{proc['name']}"
+        combined['files'][key] = proc
+    for view in sql_result.get('views', []):
+        key = f"view_{view['name']}"
+        combined['files'][key] = view
 
-    # Update total lines of code
-    total_sql_lines = sum(
-        obj.get('metrics', {}).get('lines', 0)
-        for obj_type in ['stored_procedures', 'views', 'functions']
-        for obj in result.get(obj_type, [])
-    )
-    combined['summary']['project_stats']['lines_of_code'] += total_sql_lines
 
-    # Add SQL-specific insights
-    if proc_count > 0:
-        combined['insights'].append(f"Found {proc_count} stored procedures")
-    if view_count > 0:
-        combined['insights'].append(f"Found {view_count} views")
-    if func_count > 0:
-        combined['insights'].append(f"Found {func_count} SQL functions")
 
-    # Add high-complexity SQL objects to insights
-    complex_objects = [
-        f"{obj['name']} ({obj['type']})"
-        for obj_type in ['stored_procedures', 'views', 'functions']
-        for obj in result.get(obj_type, [])
-        if obj.get('metrics', {}).get('complexity', 0) > 5
-    ]
-    if complex_objects:
-        combined['insights'].append(
-            f"Complex SQL objects detected: {', '.join(complex_objects)}"
-        )
-
-    # Collect SQL dependencies
-    deps = set()
-    for obj_type in ['stored_procedures', 'views', 'functions']:
-        for obj in result.get(obj_type, []):
-            deps.update(obj.get('dependencies', []))
-
-    if deps:
-        combined['summary']['structure']['sql_dependencies'].extend(deps)
-
-    # Add SQL objects to files dict
-    for proc in result.get('stored_procedures', []):
-        key = f"sql://{proc['schema']}.{proc['name']}"
-        combined['files'][key] = {
-            'type': 'stored_procedure',
-            'content': proc['definition'],
-            'metrics': proc['metrics'],
-            'todos': proc['todos'],
-            'comments': proc['comments'],
-            'parameters': proc['parameters'],
-            'dependencies': proc['dependencies']
-        }
-
-    for view in result.get('views', []):
-        key = f"sql://{view['schema']}.{view['name']}"
-        combined['files'][key] = {
-            'type': 'view',
-            'content': view['definition'],
-            'metrics': view['metrics'],
-            'todos': view['todos'],
-            'comments': view['comments'],
-            'dependencies': view['dependencies']
-        }
-
-    for func in result.get('functions', []):
-        key = f"sql://{func['schema']}.{func['name']}"
-        combined['files'][key] = {
-            'type': 'function',
-            'content': func['definition'],
-            'metrics': func['metrics'],
-            'todos': func['todos'],
-            'comments': func['comments'],
-            'parameters': func['parameters'],
-            'dependencies': func['dependencies']
-        }
-
-def _format_sql_parameters(params: List[dict]) -> str:
-    """Format SQL parameters for full content export."""
-    if not params:
-        return "None"
-
-    formatted_params = []
-    for param in params:
-        param_str = f"@{param['name']} {param['data_type']}"
-        if 'default' in param:
-            param_str += f" = {param['default']}"
-        if 'description' in param:
-            param_str += f" -- {param['description']}"
-        formatted_params.append(param_str)
-
-    return "\n".join(formatted_params)
-
-def _format_sql_dependencies(dependencies: List[str]) -> str:
-    """Format SQL dependencies for full content export."""
-    if not dependencies:
-        return "None"
-    return "\n".join(f"- {dep}" for dep in dependencies)
 
 @click.command()
 @click.argument('path', type=click.Path(exists=True), default='.')
@@ -435,36 +362,22 @@ def _format_sql_dependencies(dependencies: List[str]) -> str:
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
 def main(path: str, output: str, format: str, full: bool, debug: bool,
          sql_server: str, sql_database: str, sql_config: str, exclude: tuple):
-    """Analyze code and generate LLM-friendly context."""
     try:
-        console.print("[bold blue]🔍 CodeLens Analysis Starting...[/]")
-
-        if debug:
-            console.print(f"Analyzing path: {path}")
-
-        # Convert paths
+        # Convert to absolute paths
         path = Path(path).resolve()
         output_path = Path(output).resolve()
 
-        # Clean and create output directory
-        if output_path.exists():
-            try:
-                # Remove old output directory and its contents
-                for item in output_path.iterdir():
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        import shutil
-                        shutil.rmtree(item)
-                output_path.rmdir()
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not fully clean output directory: {str(e)}[/]")
-                if debug:
-                    console.print(traceback.format_exc())
+        # Ensure output directory exists
+        try:
+            delete_and_create_output_dir(output_path)
+        except Exception as e:
+            console.print(f"[red]Error creating output directory: {str(e)}[/]")
+            return 1
 
-        # Create fresh output directory
-        output_path.mkdir(parents=True, exist_ok=True)
+        if debug:
+            console.print(f"[blue]Output directory: {output_path}[/]")
 
+        # Rest of the main function remains unchanged
         results = []
 
         # Load SQL configuration if provided
@@ -528,12 +441,15 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         # Write results
         result_file = output_path / f'analysis.{format}'
-        with open(result_file, 'w', encoding='utf-8') as f:
-            if format == 'txt':
-                content = combined_results.to_text()
-            else:
-                content = combined_results.to_json()
-            f.write(content)
+        try:
+            # Ensure output directory exists
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            content = combined_results.to_json() if format == 'json' else combined_results.to_text()
+            result_file.write_text(content, encoding='utf-8')
+        except Exception as e:
+            console.print(f"[red]Error writing results: {str(e)}[/]")
+            return 1
 
         console.print(f"[bold green]✨ Analysis saved to {result_file}[/]")
 
@@ -548,6 +464,10 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 console.print(f"[yellow]Warning during full export: {str(e)}[/]")
                 if debug:
                     console.print(traceback.format_exc())
+
+        # Friendly message to prompt users to give a star
+        console.print("\n [bold yellow] ⭐⭐⭐⭐⭐ If you like this tool, please consider giving it a star on GitHub![/]")
+        console.print("[bold blue]Visit: https://github.com/SikamikanikoBG/codelens.git[/]")
 
         return 0
 

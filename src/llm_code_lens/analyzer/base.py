@@ -124,6 +124,14 @@ class ProjectAnalyzer:
                     file_analysis = analyzer.analyze_file(file_path)
                     str_path = str(file_path)
 
+                    # Ensure file_analysis has required fields
+                    if not isinstance(file_analysis, dict):
+                        print(f"Error analyzing {file_path}: Invalid analysis result")
+                        continue
+
+                    if 'type' not in file_analysis:
+                        file_analysis['type'] = file_path.suffix.lower().lstrip('.')
+
                     # Skip files with errors unless they have partial results
                     if 'errors' in file_analysis and not file_analysis.get('metrics', {}).get('loc', 0):
                         print(f"Error analyzing {file_path}: {file_analysis['errors']}")

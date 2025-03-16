@@ -360,12 +360,40 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
 @click.option('--sql-database', help='SQL Database to analyze')
 @click.option('--sql-config', help='Path to SQL configuration file')
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
+@click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis')
 def main(path: str, output: str, format: str, full: bool, debug: bool,
-         sql_server: str, sql_database: str, sql_config: str, exclude: tuple):
+         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool):
     try:
         # Convert to absolute paths
         path = Path(path).resolve()
         output_path = Path(output).resolve()
+        
+        # Initialize include/exclude paths
+        include_paths = []
+        exclude_paths = []
+
+        # Launch interactive menu if requested
+        if interactive:
+            try:
+                # Import here to avoid circular imports
+                from .menu import run_menu
+                console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
+                settings = run_menu(Path(path))
+                
+                # Update paths based on user selection
+                path = settings.get('path', path)
+                include_paths = settings.get('include_paths', [])
+                exclude_paths = settings.get('exclude_paths', [])
+                
+                if debug:
+                    console.print(f"[blue]Selected path: {path}[/]")
+                    console.print(f"[blue]Included paths: {len(include_paths)}[/]")
+                    console.print(f"[blue]Excluded paths: {len(exclude_paths)}[/]")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Interactive menu failed: {str(e)}[/]")
+                if debug:
+                    console.print(traceback.format_exc())
+                console.print("[yellow]Continuing with default path selection...[/]")
 
         # Ensure output directory exists
         try:
@@ -430,6 +458,45 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Run file system analysis
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
         analyzer = ProjectAnalyzer()
+        
+        # Pass include/exclude paths to analyzer if they were set in interactive mode
+        if interactive and (include_paths or exclude_paths):
+            # Modify the analyzer's _collect_files method to respect include/exclude paths
+            original_collect_files = analyzer._collect_files
+            
+            def filtered_collect_files(self, path: Path) -> List[Path]:
+                files = original_collect_files(path)
+                filtered_files = []
+                
+                for file_path in files:
+                    # Check if file should be included based on interactive selection
+                    should_include = True
+                    
+                    # If we have explicit include paths, file must be in one of them
+                    if include_paths:
+                        should_include = False
+                        for include_path in include_paths:
+                            if str(file_path).startswith(str(include_path)):
+                                should_include = True
+                                break
+                    
+                    # Check if file is in exclude paths
+                    for exclude_path in exclude_paths:
+                        if str(file_path).startswith(str(exclude_path)):
+                            should_include = False
+                            break
+                    
+                    if should_include:
+                        filtered_files.append(file_path)
+                
+                return filtered_files
+            
+            # Replace the method
+            analyzer._collect_files = filtered_collect_files.__get__(analyzer, ProjectAnalyzer)
+            
+            if debug:
+                console.print(f"[blue]Using custom file collection with filters[/]")
+        
         fs_results = analyzer.analyze(path)
         results.append(fs_results)
 

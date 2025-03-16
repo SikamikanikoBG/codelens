@@ -156,7 +156,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
     stdscr.clear()
     
     # Get terminal dimensions
-    max_y, max_x = stdscr.getmaxlines(), stdscr.getmaxyx()[1]
+    max_y, max_x = stdscr.getmaxyx()
     state.max_visible = max_y - 4  # Reserve lines for header and footer
     
     # Set up colors

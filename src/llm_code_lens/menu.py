@@ -169,8 +169,11 @@ def draw_menu(stdscr, state: MenuState) -> None:
     
     # Draw header
     header = f" LLM Code Lens - File Selection "
-    header = header.center(max_x, "=")
-    stdscr.addstr(0, 0, header, curses.color_pair(1))
+    header = header.center(max_x-1, "=")
+    try:
+        stdscr.addstr(0, 0, header[:max_x-1], curses.color_pair(1))
+    except curses.error:
+        pass
     
     # Draw items
     visible_count = min(state.max_visible, len(state.visible_items) - state.scroll_offset)
@@ -218,22 +221,34 @@ def draw_menu(stdscr, state: MenuState) -> None:
             attr = curses.color_pair(5)
             
         # Draw the item
-        stdscr.addstr(i + 1, 0, " " * max_x)  # Clear line
-        stdscr.addstr(i + 1, 0, item_str, attr)
+        try:
+            stdscr.addstr(i + 1, 0, " " * (max_x-1))  # Clear line
+            # Make sure we don't exceed the screen width
+            safe_str = item_str[:max_x-1] if len(item_str) >= max_x else item_str
+            stdscr.addstr(i + 1, 0, safe_str, attr)
+        except curses.error:
+            # Handle potential curses errors
+            pass
     
     # Draw footer with controls
     footer_y = max_y - 2
-    controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle | Enter: Confirm "
-    controls = controls.center(max_x, "=")
-    stdscr.addstr(footer_y, 0, controls, curses.color_pair(1))
+    controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | Enter: Confirm "
+    controls = controls.center(max_x-1, "=")
+    try:
+        stdscr.addstr(footer_y, 0, controls[:max_x-1], curses.color_pair(1))
+    except curses.error:
+        pass
     
     # Draw status message
     status_y = max_y - 1
     status = f" {state.status_message} "
     if not status.strip():
         status = " Green: Included | Red: Excluded | Yellow: Directory "
-    status = status.ljust(max_x)
-    stdscr.addstr(status_y, 0, status)
+    status = status.ljust(max_x-1)
+    try:
+        stdscr.addstr(status_y, 0, status[:max_x-1])
+    except curses.error:
+        pass
     
     stdscr.refresh()
 

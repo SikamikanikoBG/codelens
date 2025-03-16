@@ -191,9 +191,9 @@ def draw_menu(stdscr, state: MenuState) -> None:
         
         # Determine selection indicator
         if str(path) in state.selected_items:
-            sel_indicator = "[✓]"
+            sel_indicator = "[+]"  # Using + instead of ✓
         elif str(path) in state.excluded_items:
-            sel_indicator = "[✗]"
+            sel_indicator = "[-]"  # Using - instead of ✗
         else:
             sel_indicator = "[ ]"
             

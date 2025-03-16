@@ -129,10 +129,7 @@ class MenuState:
                                   key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                     
                     for item in items:
-                        # Skip hidden files/directories
-                        if item.name.startswith('.'):
-                            continue
-                        
+                        # Include hidden files/directories (don't skip them)
                         self._build_item_list(item, depth + 1)
                 except PermissionError:
                     # Handle permission errors gracefully

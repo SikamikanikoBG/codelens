@@ -11,6 +11,7 @@ CodeLens is an intelligent code analysis tool designed to generate LLM-friendly 
 
 - **Multi-language support**: Analyzes Python and JavaScript/TypeScript codebases.
 - **LLM-optimized analysis**: Extracts key elements like functions, classes, dependencies, and comments.
+- **Interactive file selection**: Choose which files and directories to include in your analysis.
 - **Token-friendly outputs**: Splits large file contents into token-limited chunks for LLM compatibility.
 - **Seamless CLI**: Easy-to-use command-line interface with multiple options.
 - **TODO tracking**: Highlights TODOs and FIXMEs for better code maintenance.
@@ -46,6 +47,25 @@ Specify output format (default is `txt`):
 llmcl --format json
 ```
 
+### Interactive Mode
+Launch the interactive file selection menu:
+```bash
+llmcl --interactive
+# or use the shorthand
+llmcl -i
+```
+
+The interactive menu allows you to:
+- Navigate through your project structure
+- Expand/collapse directories
+- Include or exclude specific files and directories
+- Save your selection for future runs
+
+Combined with full export:
+```bash
+llmcl -i --full
+```
+
 ### Advanced Options
 - Export full file contents in token-limited chunks:
   ```bash
@@ -76,6 +96,22 @@ CodeLens requires no additional configuration. However, you can integrate it wit
    python scripts/install-hooks.py
    ```
 3. The pre-commit hook will automatically run tests using `pytest` before committing.
+
+---
+
+## Interactive Menu Controls
+
+When using the interactive mode (`--interactive` or `-i`), you can navigate the file selection menu with:
+
+- **Up/Down Arrow Keys**: Navigate through files and directories
+- **Right Arrow**: Expand a directory
+- **Left Arrow**: Collapse a directory
+- **Space**: Toggle inclusion/exclusion of the selected item
+- **Enter**: Confirm selection and start analysis
+- **Q**: Quit without saving
+
+By default, all files are included. Use Space to exclude specific files or directories.
+Your selection is saved between runs, so you don't have to re-select everything each time.
 
 ---
 
@@ -209,9 +245,6 @@ Run the test suite using:
 pytest
 ```
 
-### Publishing to PyPI
-
-For instructions on how to publish the package to PyPI, see [Publishing Guide](docs/publishing.md).
 
 ---
 

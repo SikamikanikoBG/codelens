@@ -183,9 +183,13 @@ class MenuState:
                 # Restore state
                 self.expanded_dirs = set(state.get('expanded_dirs', []))
                 self.excluded_items = set(state.get('excluded_items', []))
-        except Exception:
-            # Silently fail if we can't load state
-            pass
+                
+                # Set status message to indicate loaded state
+                if self.excluded_items:
+                    self.status_message = f"Loaded {len(self.excluded_items)} excluded items from saved state"
+        except Exception as e:
+            # Log the error instead of silently failing
+            self.status_message = f"Error loading menu state: {str(e)}"
 
 
 def draw_menu(stdscr, state: MenuState) -> None:
@@ -247,7 +251,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
             attr = curses.color_pair(2)  # Highlighted
         elif is_excluded:
             attr = curses.color_pair(4)  # Excluded
-        elif is_selected or (not is_excluded and not str(path) in state.selected_items):
+        elif is_selected:
             attr = curses.color_pair(3)  # Included
         else:
             attr = 0  # Default

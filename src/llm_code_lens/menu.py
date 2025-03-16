@@ -69,13 +69,17 @@ class MenuState:
         """Check if a path is excluded."""
         path_str = str(path)
         
-        # Check if this path or any parent is explicitly excluded
+        # Check if this path is explicitly excluded
+        if path_str in self.excluded_items:
+            return True
+            
+        # Check if any parent is excluded
         current = path
         while current != self.root_path and current != current.parent:
+            current = current.parent
             if str(current) in self.excluded_items:
                 return True
-            current = current.parent
-            
+                
         return False
     
     def get_current_item(self) -> Optional[Path]:
@@ -185,8 +189,9 @@ class MenuState:
                 self.excluded_items = set(state.get('excluded_items', []))
                 
                 # Set status message to indicate loaded state
-                if self.excluded_items:
-                    self.status_message = f"Loaded {len(self.excluded_items)} excluded items from saved state"
+                excluded_count = len(self.excluded_items)
+                if excluded_count > 0:
+                    self.status_message = f"Loaded {excluded_count} excluded items from saved state"
         except Exception as e:
             # Log the error instead of silently failing
             self.status_message = f"Error loading menu state: {str(e)}"
@@ -226,7 +231,6 @@ def draw_menu(stdscr, state: MenuState) -> None:
             
         path, depth = state.visible_items[idx]
         is_dir = path.is_dir()
-        is_selected = state.is_selected(path)
         is_excluded = state.is_excluded(path)
         
         # Prepare the display string
@@ -234,11 +238,11 @@ def draw_menu(stdscr, state: MenuState) -> None:
         prefix = "+ " if is_dir and str(path) in state.expanded_dirs else \
                  "- " if is_dir else "  "
         
-        # Determine selection indicator
-        if str(path) in state.excluded_items:
-            sel_indicator = "[-]"  # Using - instead of ✗
+        # Determine selection indicator based on exclusion status
+        if is_excluded:
+            sel_indicator = "[-]"  # Excluded
         else:
-            sel_indicator = "[+]"  # Using + instead of ✓
+            sel_indicator = "[+]"  # Included
             
         item_str = f"{indent}{prefix}{sel_indicator} {path.name}"
         
@@ -251,13 +255,13 @@ def draw_menu(stdscr, state: MenuState) -> None:
             attr = curses.color_pair(2)  # Highlighted
         elif is_excluded:
             attr = curses.color_pair(4)  # Excluded
-        elif is_selected:
+        elif not is_excluded:
             attr = curses.color_pair(3)  # Included
         else:
             attr = 0  # Default
             
-        # If it's a directory, add directory color
-        if is_dir and idx != state.cursor_pos:
+        # If it's a directory, add directory color (but keep excluded color if excluded)
+        if is_dir and idx != state.cursor_pos and not is_excluded:
             attr = curses.color_pair(5)
             
         # Draw the item
@@ -281,9 +285,13 @@ def draw_menu(stdscr, state: MenuState) -> None:
     
     # Draw status message
     status_y = max_y - 1
+    excluded_count = len(state.excluded_items)
     status = f" {state.status_message} "
     if not status.strip():
-        status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
+        if excluded_count > 0:
+            status = f" {excluded_count} items excluded | Space: Toggle exclusion | Enter: Confirm "
+        else:
+            status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
     status = status.ljust(max_x-1)
     try:
         stdscr.addstr(status_y, 0, status[:max_x-1])

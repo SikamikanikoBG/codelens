@@ -143,8 +143,31 @@ def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
 def delete_and_create_output_dir(output_dir: Path) -> None:
     """Delete the output directory if it exists and recreate it."""
     if output_dir.exists() and output_dir.is_dir():
+        # Preserve the menu state file if it exists
+        menu_state_file = output_dir / 'menu_state.json'
+        menu_state_data = None
+        if menu_state_file.exists():
+            try:
+                with open(menu_state_file, 'r') as f:
+                    menu_state_data = f.read()
+            except Exception:
+                pass
+                
+        # Delete the directory
         shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Recreate the directory
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Restore the menu state file if we had one
+        if menu_state_data:
+            try:
+                with open(menu_state_file, 'w') as f:
+                    f.write(menu_state_data)
+            except Exception:
+                pass
+    else:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
 def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]) -> None:
     """Export full content of all files in separate token-limited files."""

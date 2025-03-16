@@ -169,19 +169,33 @@ def delete_and_create_output_dir(output_dir: Path) -> None:
     else:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]) -> None:
+def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None) -> None:
     """Export full content of all files in separate token-limited files."""
     file_content = []
+    exclude_paths = exclude_paths or []
 
     # Export file system content
     for file_path in path.rglob('*'):
-        if file_path.is_file() and not should_ignore(file_path, ignore_patterns) and not is_binary(file_path):
-            try:
-                content = file_path.read_text(encoding='utf-8')
-                file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
-            except Exception as e:
-                console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
-                continue
+        # Skip if file should be ignored based on patterns
+        if should_ignore(file_path, ignore_patterns) or is_binary(file_path):
+            continue
+            
+        # Skip if file is in excluded paths from interactive selection
+        should_exclude = False
+        for exclude_path in exclude_paths:
+            if str(file_path).startswith(str(exclude_path)):
+                should_exclude = True
+                break
+                
+        if should_exclude:
+            continue
+            
+        try:
+            content = file_path.read_text(encoding='utf-8')
+            file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
+            continue
 
     # Combine all content
     full_content = "\n".join(file_content)
@@ -548,7 +562,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             console.print("[bold blue]📦 Exporting full contents...[/]")
             try:
                 ignore_patterns = parse_ignore_file(Path('.llmclignore')) + list(exclude)
-                export_full_content(path, output_path, ignore_patterns)
+                export_full_content(path, output_path, ignore_patterns, exclude_paths)
                 console.print("[bold green]✨ Full content export complete![/]")
             except Exception as e:
                 console.print(f"[yellow]Warning during full export: {str(e)}[/]")

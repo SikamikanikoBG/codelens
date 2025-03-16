@@ -1,3 +1,20 @@
+## [0.4.0] - 2025-01-22
+
+### Added
+- Interactive file selection menu for targeted analysis
+- Persistent selection state between runs
+- Support for hidden files/directories in the selection menu
+- Improved handling of excluded paths in full content export
+
+### Changed
+- All files are now included by default in interactive mode
+- Enhanced terminal compatibility for Windows and Unix systems
+
+### Fixed
+- Fixed menu display issues with terminal encoding
+- Resolved issues with interactive selection not being respected in analysis
+- Fixed handling of paths with special characters
+
 ## [0.3.0] - 2025-01-15
 
 ### Added

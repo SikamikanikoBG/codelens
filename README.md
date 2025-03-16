@@ -2,6 +2,9 @@
 
 CodeLens is an intelligent code analysis tool designed to generate LLM-friendly context from your codebase. With seamless integration and insightful output, it helps developers analyze their projects effectively.
 
+[![PyPI version](https://badge.fury.io/py/llm-code-lens.svg)](https://badge.fury.io/py/llm-code-lens)
+[![Python Versions](https://img.shields.io/pypi/pyversions/llm-code-lens.svg)](https://pypi.org/project/llm-code-lens/)
+
 ---
 
 ## Features
@@ -196,7 +199,7 @@ SQL analysis includes:
    ```
 4. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -e ".[dev]"
    ```
 
 ### Running Tests
@@ -205,6 +208,10 @@ Run the test suite using:
 ```bash
 pytest
 ```
+
+### Publishing to PyPI
+
+For instructions on how to publish the package to PyPI, see [Publishing Guide](docs/publishing.md).
 
 ---
 

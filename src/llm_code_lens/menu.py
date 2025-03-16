@@ -24,6 +24,9 @@ class MenuState:
         self.max_visible = 0
         self.status_message = ""
         
+        # Load saved state if available
+        self._load_state()
+        
     def toggle_dir_expanded(self, path: Path) -> None:
         """Toggle directory expansion state."""
         path_str = str(path)
@@ -37,34 +40,30 @@ class MenuState:
         """Toggle selection status of an item."""
         path_str = str(path)
         
-        # If item was excluded, remove from excluded and add to selected
+        # If item was excluded, remove from excluded
         if path_str in self.excluded_items:
             self.excluded_items.remove(path_str)
-            self.selected_items.add(path_str)
+        # If item was neither excluded nor selected, add to excluded
+        elif path_str not in self.selected_items:
+            self.excluded_items.add(path_str)
         # If item was selected, remove from selected and add to excluded
-        elif path_str in self.selected_items:
+        else:
             self.selected_items.remove(path_str)
             self.excluded_items.add(path_str)
-        # If item was neither, add to selected
-        else:
-            self.selected_items.add(path_str)
             
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
         path_str = str(path)
         
-        # Check if this path or any parent is explicitly selected
+        # Check if this path or any parent is explicitly excluded
         current = path
         while current != self.root_path and current != current.parent:
-            if str(current) in self.selected_items:
-                return True
+            if str(current) in self.excluded_items:
+                return False
             current = current.parent
             
-        # If not explicitly selected or excluded, it's included by default
-        if path_str not in self.excluded_items:
-            return True
-            
-        return False
+        # If not explicitly excluded, it's included by default
+        return True
         
     def is_excluded(self, path: Path) -> bool:
         """Check if a path is excluded."""
@@ -140,14 +139,53 @@ class MenuState:
     
     def get_results(self) -> Dict[str, Any]:
         """Get the final results of the selection process."""
-        include_paths = [Path(p) for p in self.selected_items]
+        include_paths = []
         exclude_paths = [Path(p) for p in self.excluded_items]
+        
+        # Save state for future runs
+        self._save_state()
         
         return {
             'path': self.root_path,
             'include_paths': include_paths,
             'exclude_paths': exclude_paths
         }
+        
+    def _save_state(self) -> None:
+        """Save the current state to a file."""
+        try:
+            state_dir = self.root_path / '.codelens'
+            state_dir.mkdir(exist_ok=True)
+            state_file = state_dir / 'menu_state.json'
+            
+            # Convert paths to strings for JSON serialization
+            state = {
+                'expanded_dirs': list(self.expanded_dirs),
+                'excluded_items': list(self.excluded_items)
+            }
+            
+            import json
+            with open(state_file, 'w') as f:
+                json.dump(state, f)
+        except Exception:
+            # Silently fail if we can't save state
+            pass
+            
+    def _load_state(self) -> None:
+        """Load the saved state from a file."""
+        try:
+            state_file = self.root_path / '.codelens' / 'menu_state.json'
+            if state_file.exists():
+                import json
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+                
+                # Restore state
+                self.expanded_dirs = set(state.get('expanded_dirs', []))
+                self.excluded_items = set(state.get('excluded_items', []))
+        except Exception:
+            # Silently fail if we can't load state
+            pass
 
 
 def draw_menu(stdscr, state: MenuState) -> None:
@@ -193,12 +231,10 @@ def draw_menu(stdscr, state: MenuState) -> None:
                  "- " if is_dir else "  "
         
         # Determine selection indicator
-        if str(path) in state.selected_items:
-            sel_indicator = "[+]"  # Using + instead of ✓
-        elif str(path) in state.excluded_items:
+        if str(path) in state.excluded_items:
             sel_indicator = "[-]"  # Using - instead of ✗
         else:
-            sel_indicator = "[ ]"
+            sel_indicator = "[+]"  # Using + instead of ✓
             
         item_str = f"{indent}{prefix}{sel_indicator} {path.name}"
         
@@ -243,7 +279,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
     status_y = max_y - 1
     status = f" {state.status_message} "
     if not status.strip():
-        status = " Green: Included | Red: Excluded | Yellow: Directory "
+        status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
     status = status.ljust(max_x-1)
     try:
         stdscr.addstr(status_y, 0, status[:max_x-1])

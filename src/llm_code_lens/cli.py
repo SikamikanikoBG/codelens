@@ -10,6 +10,7 @@ from typing import Dict, List, Union, Optional
 from rich.console import Console
 from .analyzer.base import ProjectAnalyzer, AnalysisResult
 from .analyzer.sql import SQLServerAnalyzer
+from .version import check_for_newer_version
 import tiktoken
 import traceback
 import os
@@ -491,6 +492,9 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 if debug:
                     console.print(traceback.format_exc())
 
+        # Check for newer version (non-blocking)
+        check_for_newer_version()
+        
         # Run file system analysis
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
         analyzer = ProjectAnalyzer()

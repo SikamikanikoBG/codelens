@@ -30,7 +30,9 @@ dependencies = [
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
     "pyodbc>=4.0.39",  # For SQL Server connectivity
-    "windows-curses;platform_system=='Windows'"  # For TUI on Windows
+    "windows-curses;platform_system=='Windows'",  # For TUI on Windows
+    "packaging>=22.0.0",  # For version comparison
+    "requests>=2.28.0"   # For PyPI version checking
 ]
 
 [tool.hatch.build.targets.wheel]

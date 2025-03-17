@@ -6,7 +6,8 @@ import pytest
 from pathlib import Path
 import tempfile
 import os
-from src.llm_code_lens.menu import MenuState
+import sys
+from llm_code_lens.menu import MenuState
 
 def test_menu_state_validation():
     """Test that MenuState validation correctly identifies excluded items."""

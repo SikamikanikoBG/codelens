@@ -6,8 +6,9 @@ import pytest
 from pathlib import Path
 import tempfile
 import os
-from src.llm_code_lens.analyzer.base import ProjectAnalyzer
-from src.llm_code_lens.cli import main
+import sys
+from llm_code_lens.analyzer.base import ProjectAnalyzer
+from llm_code_lens.cli import main
 
 def test_filtered_collect_files():
     """Test that filtered_collect_files correctly filters files based on include/exclude paths."""

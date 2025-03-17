@@ -117,6 +117,10 @@ def split_content_by_tokens(content: str, chunk_size: int = 100000) -> List[str]
 
 def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
     """Split content by lines with a maximum chunk size."""
+    # Handle empty content case first
+    if not content:
+        return [""]
+        
     lines = content.splitlines(keepends=True)  # Keep line endings
     chunks = []
     current_chunk = []
@@ -136,7 +140,7 @@ def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
         chunks.append(''.join(current_chunk))
         
     # Handle special case where we got no chunks
-    if not chunks and content:
+    if not chunks:
         return [content]  # Return entire content as one chunk
         
     return chunks
@@ -336,10 +340,9 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
         if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
             _combine_sql_results(combined, result)
         else:
-            # If result is AnalysisResult, convert to dict using to_json and json.loads
+            # If result is AnalysisResult, convert to dict
             if isinstance(result, AnalysisResult):
-                import json
-                result_dict = json.loads(result.to_json())
+                result_dict = result.dict()  # Use dict() method instead of to_json
             else:
                 result_dict = result
             _combine_fs_results(combined, result_dict)
@@ -384,6 +387,9 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
     for view in sql_result.get('views', []):
         key = f"view_{view['name']}"
         combined['files'][key] = view
+    for func in sql_result.get('functions', []):
+        key = f"function_{func['name']}"
+        combined['files'][key] = func
 
 
 

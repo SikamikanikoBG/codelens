@@ -429,27 +429,25 @@ def test_combine_results(mock_json_loads):
     assert 'stored_proc_proc1' in combined_dict['files']
     assert 'view_view1' in combined_dict['files']
 
-@patch('click.command')
-@patch('click.argument')
-@patch('click.option')
-def test_main_function_structure(mock_option, mock_argument, mock_command):
+def test_main_function_structure():
     """Test the structure of the main CLI function."""
-    # This is a basic test to ensure the main function is properly decorated
+    # This is a basic test to ensure the main function exists
     # We're not testing the actual execution since that would be complex
     
-    # Verify command is used
-    mock_command.assert_called_once()
+    # Import the main function to verify it exists
+    from llm_code_lens.cli import main
     
-    # Verify argument is used for path
-    mock_argument.assert_called_once()
-    assert mock_argument.call_args[0][0] == 'path'
+    # Check that it's a function
+    assert callable(main)
     
-    # Verify options are used
-    assert mock_option.call_count > 0
+    # Check that it has the expected parameters
+    import inspect
+    sig = inspect.signature(main)
+    params = sig.parameters
     
-    # Check for key options
-    option_names = [call_args[0][0] for call_args in mock_option.call_args_list]
-    assert '--output' in ''.join(option_names)
-    assert '--format' in ''.join(option_names)
-    assert '--debug' in ''.join(option_names)
-    assert '--interactive' in ''.join(option_names)
+    # Check for key parameters
+    assert 'path' in params
+    assert 'output' in params
+    assert 'format' in params
+    assert 'debug' in params
+    assert 'interactive' in params

@@ -1,3 +1,14 @@
+## [0.4.1] - 2025-03-17
+
+### Added
+- Made interactive mode the default interface
+- Added version check notification for newer PyPI versions
+- Integrated CLI arguments into the interactive interface
+
+### Changed
+- Improved user experience with always-on interactive menu
+- Settings now persist between runs in the interactive menu
+
 ## [0.4.0] - 2025-01-22
 
 ### Added

@@ -32,55 +32,66 @@ pip install llm-code-lens
 ## Usage
 
 ### Basic Usage
-Analyze the current directory:
+Simply run:
 ```bash
 llmcl
 ```
 
-Analyze a specific directory:
-```bash
-llmcl path/to/your/code
-```
+This launches the interactive interface where you can:
+- Navigate and select files/directories to analyze
+- Configure all analysis options
+- Save your settings for future runs
 
-Specify output format (default is `txt`):
-```bash
-llmcl --format json
-```
+The tool now always opens in interactive mode for improved usability.
 
-### Interactive Mode
-Launch the interactive file selection menu:
-```bash
-llmcl --interactive
-# or use the shorthand
-llmcl -i
-```
+### Interactive Interface
+CodeLens now features an always-on interactive interface that provides:
+- File/directory navigation and selection
+- Analysis option configuration through easy-to-use menus
+- Persistent settings between runs
+- Visual feedback on selection status
 
-The interactive menu allows you to:
-- Navigate through your project structure
-- Expand/collapse directories
-- Include or exclude specific files and directories
-- Save your selection for future runs
+The interactive interface allows you to:
+- Navigate through your project structure with arrow keys
+- Expand/collapse directories with Right/Left arrows
+- Include or exclude specific files and directories with Space
+- Toggle format, export, and debug options with function keys
+- Save your selection for future runs automatically
 
-Combined with full export:
-```bash
-llmcl -i --full
-```
+Key shortcuts in the interactive interface:
+- **Up/Down**: Navigate files and directories
+- **Right**: Expand a directory
+- **Left**: Collapse a directory
+- **Space**: Toggle inclusion/exclusion of the selected item
+- **F1**: Toggle output format (txt/json)
+- **F2**: Toggle full export mode
+- **F3**: Toggle debug mode
+- **Enter**: Confirm selection and start analysis
+- **Q**: Quit without saving
 
 ### Advanced Options
-- Export full file contents in token-limited chunks:
-  ```bash
-  llmcl --full
-  ```
+All options are available directly in the interactive interface:
 
-- Enable debug output:
-  ```bash
-  llmcl --debug
-  ```
+- **Format**: Toggle between text and JSON output (F1)
+- **Full Export**: Enable/disable full file content export (F2)
+- **Debug**: Enable/disable debug output (F3)
+- **SQL Connection**: Configure SQL server connections
 
-- Customize the output directory:
-  ```bash
-  llmcl --output /path/to/output
-  ```
+All settings persist between runs, eliminating the need to specify command-line options repeatedly.
+
+For automation scenarios, all command-line options still work:
+```bash
+llmcl --format json --full --debug
+```
+
+### Version Checking
+CodeLens now automatically checks for newer versions on PyPI and notifies you when an update is available. This check:
+- Runs silently in the background
+- Only notifies when newer versions exist
+- Provides upgrade instructions
+- Works offline with no errors or delays
+
+This feature ensures you always know when new features and improvements are available.
 
 ---
 
@@ -101,17 +112,19 @@ CodeLens requires no additional configuration. However, you can integrate it wit
 
 ## Interactive Menu Controls
 
-When using the interactive mode (`--interactive` or `-i`), you can navigate the file selection menu with:
+The interactive interface provides intuitive controls for navigating your project and configuring analysis options:
 
 - **Up/Down Arrow Keys**: Navigate through files and directories
 - **Right Arrow**: Expand a directory
 - **Left Arrow**: Collapse a directory
 - **Space**: Toggle inclusion/exclusion of the selected item
+- **Tab**: Switch between Files and Options sections
+- **F1-F5**: Toggle or edit various analysis options
 - **Enter**: Confirm selection and start analysis
 - **Q**: Quit without saving
 
 By default, all files are included. Use Space to exclude specific files or directories.
-Your selection is saved between runs, so you don't have to re-select everything each time.
+Your selection and settings are saved between runs, so you don't have to reconfigure everything each time.
 
 ---
 

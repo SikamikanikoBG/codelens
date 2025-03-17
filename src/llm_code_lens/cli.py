@@ -267,7 +267,7 @@ def _combine_fs_results(combined: dict, result: dict) -> None:
     combined['summary']['project_stats']['lines_of_code'] += stats.get('lines_of_code', 0)
 
     # Update code metrics
-    metrics = result_dict.get('summary', {}).get('code_metrics', {})
+    metrics = result.get('summary', {}).get('code_metrics', {})
     for metric_type in ['functions', 'classes']:
         if metric_type in metrics:
             for key in ['count', 'with_docs', 'complex']:
@@ -282,21 +282,21 @@ def _combine_fs_results(combined: dict, result: dict) -> None:
             combined['summary']['code_metrics']['imports']['unique'].update(unique_imports)
 
     # Update maintenance info
-    maintenance = result_dict.get('summary', {}).get('maintenance', {})
+    maintenance = result.get('summary', {}).get('maintenance', {})
     combined['summary']['maintenance']['todos'].extend(maintenance.get('todos', []))
     
     # Update structure info
-    structure = result_dict.get('summary', {}).get('structure', {})
+    structure = result.get('summary', {}).get('structure', {})
     if 'directories' in structure:
         dirs = structure['directories']
         if isinstance(dirs, (set, list)):
             combined['summary']['structure']['directories'].update(dirs)
 
     # Update insights and files
-    if 'insights' in result_dict:
-        combined['insights'].extend(result_dict['insights'])
-    if 'files' in result_dict:
-        combined['files'].update(result_dict['files'])
+    if 'insights' in result:
+        combined['insights'].extend(result['insights'])
+    if 'files' in result:
+        combined['files'].update(result['files'])
 
 def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResult:
     """Combine multiple analysis results into a single result."""

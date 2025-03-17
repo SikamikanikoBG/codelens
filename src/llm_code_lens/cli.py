@@ -259,15 +259,10 @@ FUNCTION: [{func['schema']}].[{func['name']}]
             except Exception as e:
                 console.print(f"[yellow]Warning: Error writing {output_file}: {str(e)}[/]")
 
-def _combine_fs_results(combined: dict, result: Union[dict, AnalysisResult]) -> None:
+def _combine_fs_results(combined: dict, result: dict) -> None:
     """Combine file system analysis results."""
-    if isinstance(result, AnalysisResult):
-        result_dict = result.dict()  # Convert AnalysisResult to dict
-    else:
-        result_dict = result  # Already a dict
-
     # Update project stats
-    stats = result_dict.get('summary', {}).get('project_stats', {})
+    stats = result.get('summary', {}).get('project_stats', {})
     combined['summary']['project_stats']['total_files'] += stats.get('total_files', 0)
     combined['summary']['project_stats']['lines_of_code'] += stats.get('lines_of_code', 0)
 
@@ -337,16 +332,21 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
     }
 
     for result in results:
+        # Handle SQL results
         if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
             _combine_sql_results(combined, result)
-        else:
-            # If result is AnalysisResult, convert to dict
-            if isinstance(result, AnalysisResult):
-                # Use __dict__ or convert to JSON and back
-                result_dict = json.loads(result.to_json())
-            else:
-                result_dict = result
+        # Handle AnalysisResult objects
+        elif isinstance(result, AnalysisResult):
+            # Convert AnalysisResult to a simple dict for easier processing
+            result_dict = {
+                'summary': result.summary,
+                'insights': result.insights,
+                'files': result.files
+            }
             _combine_fs_results(combined, result_dict)
+        # Handle plain dictionaries
+        else:
+            _combine_fs_results(combined, result)
 
     # Calculate final metrics
     total_items = (combined['summary']['project_stats']['total_files'] +

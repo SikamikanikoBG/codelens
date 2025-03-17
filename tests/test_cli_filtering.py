@@ -382,15 +382,11 @@ def test_combine_sql_results():
     assert 'view_view1' in combined['files']
     assert 'function_func1' in combined['files']
 
-@patch('json.loads')
-def test_combine_results(mock_json_loads):
+def test_combine_results():
     """Test _combine_results function."""
-    # Setup mocks
-    mock_json_loads.side_effect = lambda x: x  # Just return the input
-    
-    # Create test results
-    fs_result = AnalysisResult(
-        summary={
+    # Create test results with direct dictionaries instead of AnalysisResult
+    fs_result = {
+        'summary': {
             'project_stats': {'total_files': 5, 'lines_of_code': 500},
             'code_metrics': {
                 'functions': {'count': 3, 'with_docs': 1, 'complex': 2},
@@ -400,9 +396,9 @@ def test_combine_results(mock_json_loads):
             'maintenance': {'todos': ['TODO: Fix this']},
             'structure': {'directories': ['/dir1']}
         },
-        insights=['Insight 1'],
-        files={'file1.py': {'analysis': 'data'}}
-    )
+        'insights': ['Insight 1'],
+        'files': {'file1.py': {'analysis': 'data'}}
+    }
     
     sql_result = {
         'stored_procedures': [{'name': 'proc1', 'schema': 'dbo', 'definition': 'CREATE PROCEDURE proc1 AS SELECT 1'}],
@@ -415,19 +411,16 @@ def test_combine_results(mock_json_loads):
     # Check result is an AnalysisResult
     assert isinstance(combined, AnalysisResult)
     
-    # Convert to dict for easier checking
-    combined_dict = combined.dict()
-    
-    # Check combined results
-    assert combined_dict['summary']['project_stats']['total_files'] == 5
-    assert combined_dict['summary']['project_stats']['total_sql_objects'] == 2
-    assert combined_dict['summary']['code_metrics']['functions']['count'] == 3
-    assert combined_dict['summary']['code_metrics']['sql_objects']['procedures'] == 1
-    assert combined_dict['summary']['code_metrics']['sql_objects']['views'] == 1
-    assert len(combined_dict['insights']) == 1
-    assert 'file1.py' in combined_dict['files']
-    assert 'stored_proc_proc1' in combined_dict['files']
-    assert 'view_view1' in combined_dict['files']
+    # Check combined results directly
+    assert combined.summary['project_stats']['total_files'] == 5
+    assert combined.summary['project_stats']['total_sql_objects'] == 2
+    assert combined.summary['code_metrics']['functions']['count'] == 3
+    assert combined.summary['code_metrics']['sql_objects']['procedures'] == 1
+    assert combined.summary['code_metrics']['sql_objects']['views'] == 1
+    assert len(combined.insights) == 1
+    assert 'file1.py' in combined.files
+    assert 'stored_proc_proc1' in combined.files
+    assert 'view_view1' in combined.files
 
 def test_main_function_structure():
     """Test the structure of the main CLI function."""

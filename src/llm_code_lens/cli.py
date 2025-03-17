@@ -397,9 +397,9 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
 @click.option('--sql-database', help='SQL Database to analyze')
 @click.option('--sql-config', help='Path to SQL configuration file')
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
-@click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis')
+@click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
-         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool):
+         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool = True):
     try:
         # Convert to absolute paths
         path = Path(path).resolve()
@@ -409,28 +409,27 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         include_paths = []
         exclude_paths = []
 
-        # Launch interactive menu if requested
-        if interactive:
-            try:
-                # Import here to avoid circular imports
-                from .menu import run_menu
-                console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
-                settings = run_menu(Path(path))
-                
-                # Update paths based on user selection
-                path = settings.get('path', path)
-                include_paths = settings.get('include_paths', [])
-                exclude_paths = settings.get('exclude_paths', [])
-                
-                if debug:
-                    console.print(f"[blue]Selected path: {path}[/]")
-                    console.print(f"[blue]Included paths: {len(include_paths)}[/]")
-                    console.print(f"[blue]Excluded paths: {len(exclude_paths)}[/]")
-            except Exception as e:
-                console.print(f"[yellow]Warning: Interactive menu failed: {str(e)}[/]")
-                if debug:
-                    console.print(traceback.format_exc())
-                console.print("[yellow]Continuing with default path selection...[/]")
+        # Launch interactive menu (default behavior)
+        try:
+            # Import here to avoid circular imports
+            from .menu import run_menu
+            console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
+            settings = run_menu(Path(path))
+            
+            # Update paths based on user selection
+            path = settings.get('path', path)
+            include_paths = settings.get('include_paths', [])
+            exclude_paths = settings.get('exclude_paths', [])
+            
+            if debug:
+                console.print(f"[blue]Selected path: {path}[/]")
+                console.print(f"[blue]Included paths: {len(include_paths)}[/]")
+                console.print(f"[blue]Excluded paths: {len(exclude_paths)}[/]")
+        except Exception as e:
+            console.print(f"[yellow]Warning: Interactive menu failed: {str(e)}[/]")
+            if debug:
+                console.print(traceback.format_exc())
+            console.print("[yellow]Continuing with default path selection...[/]")
 
         # Ensure output directory exists
         try:

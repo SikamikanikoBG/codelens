@@ -342,3 +342,211 @@ def test_handle_input_toggle_section():
         result = handle_input(ord('f'), state)
         assert result is False
         assert state.active_section == 'files'
+
+def test_handle_input_editing_mode():
+    """Test handle_input in editing mode."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Set up editing mode
+        state.editing_option = 'sql_server'
+        state.edit_buffer = "test"
+        state.finish_editing = MagicMock()
+        
+        # Test escape key
+        result = handle_input(27, state)  # Escape
+        assert result is False
+        state.finish_editing.assert_called_with(save=False)
+        
+        # Reset and test enter key
+        state.finish_editing.reset_mock()
+        result = handle_input(10, state)  # Enter
+        assert result is False
+        state.finish_editing.assert_called_with(save=True)
+        
+        # Test backspace
+        state.finish_editing.reset_mock()
+        state.finish_editing = lambda save: None  # Replace with dummy function
+        state.edit_buffer = "test"
+        result = handle_input(127, state)  # Backspace
+        assert result is False
+        assert state.edit_buffer == "tes"
+        
+        # Test adding character
+        result = handle_input(ord('x'), state)
+        assert result is False
+        assert state.edit_buffer == "tesx"
+
+def test_handle_input_file_navigation():
+    """Test handle_input for file navigation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "test_dir").mkdir()
+        
+        state = MenuState(root)
+        state.expanded_dirs.add(str(root))
+        state.rebuild_visible_items()
+        
+        # Mock functions to avoid side effects
+        state.toggle_dir_expanded = MagicMock()
+        state.toggle_selection = MagicMock()
+        
+        # Set up current item to be a directory
+        test_dir = root / "test_dir"
+        state.get_current_item = MagicMock(return_value=test_dir)
+        
+        # Test right arrow (expand directory)
+        result = handle_input(curses.KEY_RIGHT, state)
+        assert result is False
+        state.expanded_dirs.add.assert_called_with(str(test_dir))
+        
+        # Test left arrow (collapse directory)
+        state.expanded_dirs.add.reset_mock()
+        state.expanded_dirs.add(str(test_dir))  # Add to expanded dirs
+        result = handle_input(curses.KEY_LEFT, state)
+        assert result is False
+        assert str(test_dir) not in state.expanded_dirs
+        
+        # Test space (toggle selection)
+        result = handle_input(ord(' '), state)
+        assert result is False
+        state.toggle_selection.assert_called_with(test_dir)
+
+def test_handle_input_option_controls():
+    """Test handle_input for option controls."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Switch to options section
+        state.active_section = 'options'
+        state.option_cursor = 0
+        
+        # Mock functions
+        state.toggle_option = MagicMock()
+        state.start_editing_option = MagicMock()
+        state.move_option_cursor = MagicMock()
+        
+        # Test up/down arrows
+        result = handle_input(curses.KEY_UP, state)
+        assert result is False
+        state.move_option_cursor.assert_called_with(-1)
+        
+        state.move_option_cursor.reset_mock()
+        result = handle_input(curses.KEY_DOWN, state)
+        assert result is False
+        state.move_option_cursor.assert_called_with(1)
+        
+        # Test space for format option (index 0)
+        result = handle_input(ord(' '), state)
+        assert result is False
+        state.toggle_option.assert_called_with('format')
+        
+        # Test space for SQL Server option (index 3)
+        state.option_cursor = 3
+        state.toggle_option.reset_mock()
+        result = handle_input(ord(' '), state)
+        assert result is False
+        state.start_editing_option.assert_called_with('sql_server')
+
+def test_handle_input_function_keys():
+    """Test handle_input for function keys."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Mock functions
+        state.toggle_option = MagicMock()
+        state.start_editing_option = MagicMock()
+        
+        # Test function keys
+        result = handle_input(curses.KEY_F1, state)
+        assert result is False
+        state.toggle_option.assert_called_with('format')
+        
+        state.toggle_option.reset_mock()
+        result = handle_input(curses.KEY_F2, state)
+        assert result is False
+        state.toggle_option.assert_called_with('full')
+        
+        state.toggle_option.reset_mock()
+        result = handle_input(curses.KEY_F3, state)
+        assert result is False
+        state.toggle_option.assert_called_with('debug')
+        
+        result = handle_input(curses.KEY_F4, state)
+        assert result is False
+        state.start_editing_option.assert_called_with('sql_server')
+
+def test_menu_state_set_option():
+    """Test setting options in MenuState."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Test setting a string option
+        state.set_option('sql_server', 'localhost')
+        assert state.options['sql_server'] == 'localhost'
+        assert 'sql_server' in state.status_message
+        
+        # Test setting a boolean option
+        state.set_option('debug', True)
+        assert state.options['debug'] is True
+        assert 'debug' in state.status_message
+
+def test_menu_state_editing_options():
+    """Test editing options in MenuState."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Test starting to edit an option
+        state.start_editing_option('sql_server')
+        assert state.editing_option == 'sql_server'
+        assert state.edit_buffer == ''
+        assert 'Editing' in state.status_message
+        
+        # Test finishing editing with save
+        state.edit_buffer = 'localhost'
+        state.finish_editing(save=True)
+        assert state.editing_option is None
+        assert state.options['sql_server'] == 'localhost'
+        
+        # Test editing a new exclude pattern
+        state.start_editing_option('new_exclude')
+        assert state.editing_option == 'new_exclude'
+        
+        # Add a mock for add_exclude_pattern
+        state.add_exclude_pattern = MagicMock()
+        
+        # Test finishing with save
+        state.edit_buffer = 'node_modules'
+        state.finish_editing(save=True)
+        state.add_exclude_pattern.assert_called_with('node_modules')
+
+def test_menu_state_exclude_patterns():
+    """Test adding and removing exclude patterns."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        state = MenuState(root)
+        
+        # Test adding a pattern
+        state.add_exclude_pattern('node_modules')
+        assert 'node_modules' in state.options['exclude_patterns']
+        assert 'Added exclude pattern' in state.status_message
+        
+        # Test adding a duplicate pattern (should not add)
+        initial_count = len(state.options['exclude_patterns'])
+        state.add_exclude_pattern('node_modules')
+        assert len(state.options['exclude_patterns']) == initial_count
+        
+        # Test removing a pattern
+        state.remove_exclude_pattern(0)
+        assert 'node_modules' not in state.options['exclude_patterns']
+        assert 'Removed exclude pattern' in state.status_message
+        
+        # Test removing with invalid index
+        state.status_message = ""
+        state.remove_exclude_pattern(99)
+        assert state.status_message == ""  # Should not change

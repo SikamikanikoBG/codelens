@@ -422,6 +422,47 @@ def test_combine_results():
     assert 'stored_proc_proc1' in combined.files
     assert 'view_view1' in combined.files
 
+def test_combine_results_with_analysis_result():
+    """Test _combine_results function with AnalysisResult objects."""
+    # Create an AnalysisResult object
+    analysis_result = AnalysisResult(
+        summary={
+            'project_stats': {'total_files': 3, 'lines_of_code': 300},
+            'code_metrics': {
+                'functions': {'count': 2, 'with_docs': 1, 'complex': 1},
+                'classes': {'count': 1, 'with_docs': 0},
+                'imports': {'count': 3, 'unique': ['import2']}
+            },
+            'maintenance': {'todos': ['TODO: Another task']},
+            'structure': {'directories': ['/dir2']}
+        },
+        insights=['Insight 2'],
+        files={'file2.py': {'analysis': 'more data'}}
+    )
+    
+    # Create a SQL result
+    sql_result = {
+        'stored_procedures': [{'name': 'proc2', 'schema': 'dbo', 'definition': 'CREATE PROCEDURE proc2 AS SELECT 2'}],
+        'functions': [{'name': 'func1', 'schema': 'dbo', 'definition': 'CREATE FUNCTION func1() RETURNS INT AS BEGIN RETURN 1 END'}]
+    }
+    
+    # Combine results
+    combined = _combine_results([analysis_result, sql_result])
+    
+    # Check result is an AnalysisResult
+    assert isinstance(combined, AnalysisResult)
+    
+    # Check combined results directly
+    assert combined.summary['project_stats']['total_files'] == 3
+    assert combined.summary['project_stats']['total_sql_objects'] == 2
+    assert combined.summary['code_metrics']['functions']['count'] == 2
+    assert combined.summary['code_metrics']['sql_objects']['procedures'] == 1
+    assert combined.summary['code_metrics']['sql_objects']['functions'] == 1
+    assert len(combined.insights) == 1
+    assert 'file2.py' in combined.files
+    assert 'stored_proc_proc2' in combined.files
+    assert 'function_func1' in combined.files
+
 def test_main_function_structure():
     """Test the structure of the main CLI function."""
     # This is a simplified test to ensure the main function exists

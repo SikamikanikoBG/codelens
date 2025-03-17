@@ -234,10 +234,40 @@ class MenuState:
         if 0 <= new_pos < total_options:
             self.option_cursor = new_pos
     
+    def validate_selection(self) -> Dict[str, List[str]]:
+        """Validate the selection and return statistics about selected/excluded items."""
+        stats = {
+            'excluded_count': len(self.excluded_items),
+            'selected_count': len(self.selected_items),
+            'excluded_dirs': [],
+            'excluded_files': []
+        }
+        
+        # Categorize excluded items
+        for path_str in self.excluded_items:
+            path = Path(path_str)
+            if path.is_dir():
+                stats['excluded_dirs'].append(path_str)
+            else:
+                stats['excluded_files'].append(path_str)
+                
+        return stats
+    
     def get_results(self) -> Dict[str, Any]:
         """Get the final results of the selection process."""
         include_paths = []
         exclude_paths = [Path(p) for p in self.excluded_items]
+        
+        # Validate selection and log statistics if debug is enabled
+        validation_stats = self.validate_selection()
+        if self.options['debug']:
+            status_message = (
+                f"Selection validation: {validation_stats['excluded_count']} items excluded "
+                f"({len(validation_stats['excluded_dirs'])} directories, "
+                f"{len(validation_stats['excluded_files'])} files)"
+            )
+            self.status_message = status_message
+            print(status_message)
         
         # Save state for future runs
         self._save_state()
@@ -253,7 +283,8 @@ class MenuState:
             'sql_server': self.options['sql_server'],
             'sql_database': self.options['sql_database'],
             'sql_config': self.options['sql_config'],
-            'exclude': self.options['exclude_patterns']
+            'exclude': self.options['exclude_patterns'],
+            'validation': validation_stats if self.options['debug'] else None
         }
         
     def _save_state(self) -> None:

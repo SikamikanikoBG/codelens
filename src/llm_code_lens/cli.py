@@ -551,10 +551,12 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             def filtered_collect_files(self, path: Path) -> List[Path]:
                 files = original_collect_files(path)
                 filtered_files = []
+                excluded_files = []
                 
                 for file_path in files:
                     # Check if file should be included based on interactive selection
                     should_include = True
+                    exclusion_reason = None
                     
                     # If we have explicit include paths, file must be in one of them
                     if include_paths:
@@ -563,15 +565,35 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                             if str(file_path).startswith(str(include_path)):
                                 should_include = True
                                 break
+                        if not should_include:
+                            exclusion_reason = "Not in include paths"
                     
                     # Check if file is in exclude paths
                     for exclude_path in exclude_paths:
                         if str(file_path).startswith(str(exclude_path)):
                             should_include = False
+                            exclusion_reason = f"Excluded by path: {exclude_path}"
                             break
                     
                     if should_include:
                         filtered_files.append(file_path)
+                    else:
+                        excluded_files.append((str(file_path), exclusion_reason))
+                
+                # Log verification information if debug mode is enabled
+                if debug:
+                    console.print(f"[blue]File collection verification:[/]")
+                    console.print(f"[blue]- Total files found: {len(files)}[/]")
+                    console.print(f"[blue]- Files included: {len(filtered_files)}[/]")
+                    console.print(f"[blue]- Files excluded: {len(excluded_files)}[/]")
+                    
+                    # Log a sample of excluded files (up to 5) with reasons
+                    if excluded_files and len(excluded_files) > 0:
+                        console.print("[blue]Sample of excluded files:[/]")
+                        for i, (file, reason) in enumerate(excluded_files[:5]):
+                            console.print(f"[blue]  {i+1}. {file} - {reason}[/]")
+                        if len(excluded_files) > 5:
+                            console.print(f"[blue]  ... and {len(excluded_files) - 5} more[/]")
                 
                 return filtered_files
             

@@ -12,7 +12,7 @@ from typing import Dict, List, Any, Tuple, Set, Optional
 class MenuState:
     """Class to manage the state of the interactive menu."""
     
-    def __init__(self, root_path: Path):
+    def __init__(self, root_path: Path, initial_settings: Dict[str, Any] = None):
         self.root_path = root_path.resolve()
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
@@ -23,6 +23,29 @@ class MenuState:
         self.visible_items: List[Tuple[Path, int]] = []  # (path, depth)
         self.max_visible = 0
         self.status_message = ""
+        
+        # CLI options
+        self.options = {
+            'format': 'txt',           # Output format (txt or json)
+            'full': False,             # Export full file contents
+            'debug': False,            # Enable debug output
+            'sql_server': '',          # SQL Server connection string
+            'sql_database': '',        # SQL Database to analyze
+            'sql_config': '',          # Path to SQL configuration file
+            'exclude_patterns': []     # Patterns to exclude
+        }
+        
+        # Apply initial settings if provided
+        if initial_settings:
+            for key, value in initial_settings.items():
+                if key in self.options:
+                    self.options[key] = value
+        
+        # UI state
+        self.active_section = 'files'  # Current active section: 'files' or 'options'
+        self.option_cursor = 0         # Cursor position in options section
+        self.editing_option = None     # Currently editing option (for text input)
+        self.edit_buffer = ""          # Buffer for text input
         
         # Load saved state if available
         self._load_state()
@@ -138,6 +161,79 @@ class MenuState:
             # Ignore any errors during item list building
             pass
     
+    def toggle_option(self, option_name: str) -> None:
+        """Toggle a boolean option or cycle through value options."""
+        if option_name not in self.options:
+            return
+            
+        if option_name == 'format':
+            # Cycle through format options
+            self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
+        elif isinstance(self.options[option_name], bool):
+            # Toggle boolean options
+            self.options[option_name] = not self.options[option_name]
+        
+        self.status_message = f"Option '{option_name}' set to: {self.options[option_name]}"
+    
+    def set_option(self, option_name: str, value: Any) -> None:
+        """Set an option to a specific value."""
+        if option_name in self.options:
+            self.options[option_name] = value
+            self.status_message = f"Option '{option_name}' set to: {value}"
+    
+    def start_editing_option(self, option_name: str) -> None:
+        """Start editing a text-based option."""
+        if option_name in self.options:
+            self.editing_option = option_name
+            self.edit_buffer = str(self.options[option_name])
+            self.status_message = f"Editing {option_name}. Press Enter to confirm, Esc to cancel."
+    
+    def finish_editing(self, save: bool = True) -> None:
+        """Finish editing the current option."""
+        if self.editing_option and save:
+            if self.editing_option == 'new_exclude':
+                # Special handling for new exclude pattern
+                if self.edit_buffer.strip():
+                    self.add_exclude_pattern(self.edit_buffer.strip())
+            else:
+                # Normal option
+                self.options[self.editing_option] = self.edit_buffer
+                self.status_message = f"Option '{self.editing_option}' set to: {self.edit_buffer}"
+        
+        self.editing_option = None
+        self.edit_buffer = ""
+    
+    def add_exclude_pattern(self, pattern: str) -> None:
+        """Add an exclude pattern."""
+        if pattern and pattern not in self.options['exclude_patterns']:
+            self.options['exclude_patterns'].append(pattern)
+            self.status_message = f"Added exclude pattern: {pattern}"
+    
+    def remove_exclude_pattern(self, index: int) -> None:
+        """Remove an exclude pattern by index."""
+        if 0 <= index < len(self.options['exclude_patterns']):
+            pattern = self.options['exclude_patterns'].pop(index)
+            self.status_message = f"Removed exclude pattern: {pattern}"
+    
+    def toggle_section(self) -> None:
+        """Toggle between files and options sections."""
+        if self.active_section == 'files':
+            self.active_section = 'options'
+            self.option_cursor = 0
+        else:
+            self.active_section = 'files'
+        
+        self.status_message = f"Switched to {self.active_section} section"
+    
+    def move_option_cursor(self, direction: int) -> None:
+        """Move the cursor in the options section."""
+        # Count total options (fixed options + exclude patterns)
+        total_options = 5 + len(self.options['exclude_patterns'])  # 5 fixed options
+        
+        new_pos = self.option_cursor + direction
+        if 0 <= new_pos < total_options:
+            self.option_cursor = new_pos
+    
     def get_results(self) -> Dict[str, Any]:
         """Get the final results of the selection process."""
         include_paths = []
@@ -146,10 +242,18 @@ class MenuState:
         # Save state for future runs
         self._save_state()
         
+        # Return all settings
         return {
             'path': self.root_path,
             'include_paths': include_paths,
-            'exclude_paths': exclude_paths
+            'exclude_paths': exclude_paths,
+            'format': self.options['format'],
+            'full': self.options['full'],
+            'debug': self.options['debug'],
+            'sql_server': self.options['sql_server'],
+            'sql_database': self.options['sql_database'],
+            'sql_config': self.options['sql_config'],
+            'exclude': self.options['exclude_patterns']
         }
         
     def _save_state(self) -> None:
@@ -162,7 +266,8 @@ class MenuState:
             # Convert paths to strings for JSON serialization
             state = {
                 'expanded_dirs': list(self.expanded_dirs),
-                'excluded_items': list(self.excluded_items)
+                'excluded_items': list(self.excluded_items),
+                'options': self.options
             }
             
             import json
@@ -185,6 +290,12 @@ class MenuState:
                 self.expanded_dirs = set(state.get('expanded_dirs', []))
                 self.excluded_items = set(state.get('excluded_items', []))
                 
+                # Restore options if available
+                if 'options' in state:
+                    for key, value in state['options'].items():
+                        if key in self.options:
+                            self.options[key] = value
+                
                 # Set status message to indicate loaded state
                 excluded_count = len(self.excluded_items)
                 if excluded_count > 0:
@@ -201,146 +312,325 @@ def draw_menu(stdscr, state: MenuState) -> None:
     
     # Get terminal dimensions
     max_y, max_x = stdscr.getmaxyx()
-    state.max_visible = max_y - 4  # Reserve lines for header and footer
     
     # Set up colors
     curses.start_color()
-    curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)  # Header/footer
+    curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)   # Header/footer
     curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)  # Selected item
     curses.init_pair(3, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Included item
     curses.init_pair(4, curses.COLOR_RED, curses.COLOR_BLACK)    # Excluded item
     curses.init_pair(5, curses.COLOR_YELLOW, curses.COLOR_BLACK) # Directory
+    curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)   # Options
+    curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_RED)    # Active section
+    
+    # Calculate layout
+    options_height = 10  # Height of options section
+    files_height = max_y - options_height - 4  # Height of files section (minus header/footer)
+    
+    # Adjust visible items based on active section
+    if state.active_section == 'files':
+        state.max_visible = files_height
+    else:
+        state.max_visible = files_height - 2  # Reduce slightly when in options mode
     
     # Draw header
-    header = f" LLM Code Lens - File Selection "
+    header = f" LLM Code Lens - {'File Selection' if state.active_section == 'files' else 'Options'} "
     header = header.center(max_x-1, "=")
     try:
         stdscr.addstr(0, 0, header[:max_x-1], curses.color_pair(1))
     except curses.error:
         pass
     
-    # Draw items
-    visible_count = min(state.max_visible, len(state.visible_items) - state.scroll_offset)
-    for i in range(visible_count):
-        idx = i + state.scroll_offset
-        if idx >= len(state.visible_items):
-            break
-            
-        path, depth = state.visible_items[idx]
-        is_dir = path.is_dir()
-        is_excluded = state.is_excluded(path)
+    # Draw section indicator
+    section_y = 1
+    files_section = " [F]iles "
+    options_section = " [O]ptions "
+    
+    try:
+        # Files section indicator
+        attr = curses.color_pair(7) if state.active_section == 'files' else curses.color_pair(1)
+        stdscr.addstr(section_y, 2, files_section, attr)
         
-        # Prepare the display string
-        indent = "  " * depth
-        prefix = "+ " if is_dir and str(path) in state.expanded_dirs else \
-                 "- " if is_dir else "  "
+        # Options section indicator
+        attr = curses.color_pair(7) if state.active_section == 'options' else curses.color_pair(1)
+        stdscr.addstr(section_y, 2 + len(files_section) + 2, options_section, attr)
+    except curses.error:
+        pass
+    
+    # Draw items if in files section or if files section is visible
+    if state.active_section == 'files' or True:  # Always show files
+        start_y = 2  # Start after header and section indicators
+        visible_count = min(state.max_visible, len(state.visible_items) - state.scroll_offset)
         
-        # Determine selection indicator based on exclusion status
-        if is_excluded:
-            sel_indicator = "[-]"  # Excluded
-        else:
-            sel_indicator = "[+]"  # Included
+        for i in range(visible_count):
+            idx = i + state.scroll_offset
+            if idx >= len(state.visible_items):
+                break
+                
+            path, depth = state.visible_items[idx]
+            is_dir = path.is_dir()
+            is_excluded = state.is_excluded(path)
             
-        item_str = f"{indent}{prefix}{sel_indicator} {path.name}"
+            # Prepare the display string
+            indent = "  " * depth
+            prefix = "+ " if is_dir and str(path) in state.expanded_dirs else \
+                     "- " if is_dir else "  "
+            
+            # Determine selection indicator based on exclusion status
+            if is_excluded:
+                sel_indicator = "[-]"  # Excluded
+            else:
+                sel_indicator = "[+]"  # Included
+                
+            item_str = f"{indent}{prefix}{sel_indicator} {path.name}"
+            
+            # Truncate if too long
+            if len(item_str) > max_x - 2:
+                item_str = item_str[:max_x - 5] + "..."
+                
+            # Determine color
+            if state.active_section == 'files' and idx == state.cursor_pos:
+                attr = curses.color_pair(2)  # Highlighted
+            elif is_excluded:
+                attr = curses.color_pair(4)  # Excluded
+            elif not is_excluded:
+                attr = curses.color_pair(3)  # Included
+            else:
+                attr = 0  # Default
+                
+            # If it's a directory, add directory color (but keep excluded color if excluded)
+            if is_dir and not (state.active_section == 'files' and idx == state.cursor_pos) and not is_excluded:
+                attr = curses.color_pair(5)
+                
+            # Draw the item
+            try:
+                stdscr.addstr(i + start_y, 0, " " * (max_x-1))  # Clear line
+                # Make sure we don't exceed the screen width
+                safe_str = item_str[:max_x-1] if len(item_str) >= max_x else item_str
+                stdscr.addstr(i + start_y, 0, safe_str, attr)
+            except curses.error:
+                # Handle potential curses errors
+                pass
+    
+    # Draw options section
+    options_start_y = files_height + 2
+    try:
+        # Draw options header
+        options_header = " Analysis Options "
+        options_header = options_header.center(max_x-1, "-")
+        stdscr.addstr(options_start_y, 0, options_header[:max_x-1], curses.color_pair(6))
         
-        # Truncate if too long
-        if len(item_str) > max_x - 2:
-            item_str = item_str[:max_x - 5] + "..."
+        # Draw options
+        option_y = options_start_y + 1
+        options = [
+            ("Format", f"{state.options['format']}", "F1"),
+            ("Full Export", f"{state.options['full']}", "F2"),
+            ("Debug Mode", f"{state.options['debug']}", "F3"),
+            ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
+            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5")
+        ]
+        
+        # Add exclude patterns
+        for i, pattern in enumerate(state.options['exclude_patterns']):
+            options.append((f"Exclude Pattern {i+1}", pattern, "Del"))
+        
+        # Option to add new exclude pattern
+        options.append(("Add Exclude Pattern", "", "Ins"))
+        
+        # Draw each option
+        for i, (name, value, key) in enumerate(options):
+            if option_y + i >= max_y - 2:  # Don't draw past footer
+                break
+                
+            # Determine if this option is selected
+            is_selected = state.active_section == 'options' and i == state.option_cursor
             
-        # Determine color
-        if idx == state.cursor_pos:
-            attr = curses.color_pair(2)  # Highlighted
-        elif is_excluded:
-            attr = curses.color_pair(4)  # Excluded
-        elif not is_excluded:
-            attr = curses.color_pair(3)  # Included
-        else:
-            attr = 0  # Default
+            # Format the option string
+            option_str = f" {name}: {value}"
+            key_str = f"[{key}]"
             
-        # If it's a directory, add directory color (but keep excluded color if excluded)
-        if is_dir and idx != state.cursor_pos and not is_excluded:
-            attr = curses.color_pair(5)
+            # Calculate padding to right-align the key
+            padding = max_x - len(option_str) - len(key_str) - 2
+            if padding < 1:
+                padding = 1
+                
+            display_str = f"{option_str}{' ' * padding}{key_str}"
             
-        # Draw the item
-        try:
-            stdscr.addstr(i + 1, 0, " " * (max_x-1))  # Clear line
-            # Make sure we don't exceed the screen width
-            safe_str = item_str[:max_x-1] if len(item_str) >= max_x else item_str
-            stdscr.addstr(i + 1, 0, safe_str, attr)
-        except curses.error:
-            # Handle potential curses errors
-            pass
+            # Truncate if too long
+            if len(display_str) > max_x - 2:
+                display_str = display_str[:max_x - 5] + "..."
+            
+            # Draw with appropriate highlighting
+            attr = curses.color_pair(2) if is_selected else curses.color_pair(6)
+            stdscr.addstr(option_y + i, 0, " " * (max_x-1))  # Clear line
+            stdscr.addstr(option_y + i, 0, display_str, attr)
+    except curses.error:
+        pass
     
     # Draw footer with controls
     footer_y = max_y - 2
-    controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | Enter: Confirm "
+    
+    if state.editing_option:
+        # Show editing controls
+        controls = " Enter: Confirm | Esc: Cancel "
+    elif state.active_section == 'files':
+        # Show file navigation controls
+        controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | Tab: Options | Enter: Confirm "
+    else:
+        # Show options controls
+        controls = " Up/Down: Navigate | Space: Toggle/Edit | Tab: Files | Enter: Confirm "
+        
     controls = controls.center(max_x-1, "=")
     try:
         stdscr.addstr(footer_y, 0, controls[:max_x-1], curses.color_pair(1))
     except curses.error:
         pass
     
-    # Draw status message
+    # Draw status message or editing prompt
     status_y = max_y - 1
-    excluded_count = len(state.excluded_items)
-    status = f" {state.status_message} "
-    if not status.strip():
-        if excluded_count > 0:
-            status = f" {excluded_count} items excluded | Space: Toggle exclusion | Enter: Confirm "
-        else:
-            status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
-    status = status.ljust(max_x-1)
-    try:
-        stdscr.addstr(status_y, 0, status[:max_x-1])
-    except curses.error:
-        pass
+    
+    if state.editing_option:
+        # Show editing prompt
+        prompt = f" Editing {state.editing_option}: {state.edit_buffer} "
+        stdscr.addstr(status_y, 0, " " * (max_x-1))  # Clear line
+        stdscr.addstr(status_y, 0, prompt[:max_x-1])
+        # Show cursor
+        curses.curs_set(1)
+        stdscr.move(status_y, len(f" Editing {state.editing_option}: ") + len(state.edit_buffer))
+    else:
+        # Show status message
+        status = f" {state.status_message} "
+        if not status.strip():
+            if state.active_section == 'files':
+                excluded_count = len(state.excluded_items)
+                if excluded_count > 0:
+                    status = f" {excluded_count} items excluded | Space: Toggle exclusion | Enter: Confirm "
+                else:
+                    status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
+            else:
+                status = " Use Space to toggle options or edit text fields | Enter: Confirm "
+                
+        status = status.ljust(max_x-1)
+        try:
+            stdscr.addstr(status_y, 0, status[:max_x-1])
+        except curses.error:
+            pass
     
     stdscr.refresh()
 
 
 def handle_input(key: int, state: MenuState) -> bool:
     """Handle user input. Returns True if user wants to exit."""
-    current_item = state.get_current_item()
+    # Handle editing mode separately
+    if state.editing_option:
+        if key == 27:  # Escape key
+            state.finish_editing(save=False)
+        elif key == 10:  # Enter key
+            state.finish_editing(save=True)
+        elif key == curses.KEY_BACKSPACE or key == 127:  # Backspace
+            state.edit_buffer = state.edit_buffer[:-1]
+        elif 32 <= key <= 126:  # Printable ASCII characters
+            state.edit_buffer += chr(key)
+        return False
     
-    if key == curses.KEY_UP:
-        state.move_cursor(-1)
-    elif key == curses.KEY_DOWN:
-        state.move_cursor(1)
-    elif key == curses.KEY_RIGHT and current_item and current_item.is_dir():
-        # Expand directory
-        state.expanded_dirs.add(str(current_item))
-        state.rebuild_visible_items()
-    elif key == curses.KEY_LEFT and current_item and current_item.is_dir():
-        # Collapse directory
-        if str(current_item) in state.expanded_dirs:
-            state.expanded_dirs.remove(str(current_item))
-        else:
-            # If already collapsed, go to parent
-            parent = current_item.parent
-            for i, (path, _) in enumerate(state.visible_items):
-                if path == parent:
-                    state.cursor_pos = i
-                    break
-        state.rebuild_visible_items()
-    elif key == ord(' ') and current_item:
-        # Toggle selection
-        state.toggle_selection(current_item)
+    # Handle normal navigation mode
+    if key == 9:  # Tab key
+        state.toggle_section()
     elif key == 10:  # Enter key
         # Confirm selection and exit
         return True
     elif key == ord('q'):
         # Quit without saving
         return True
+    elif key == ord('f') or key == ord('F'):
+        state.active_section = 'files'
+    elif key == ord('o') or key == ord('O'):
+        state.active_section = 'options'
+        
+    # Files section controls
+    if state.active_section == 'files':
+        current_item = state.get_current_item()
+        
+        if key == curses.KEY_UP:
+            state.move_cursor(-1)
+        elif key == curses.KEY_DOWN:
+            state.move_cursor(1)
+        elif key == curses.KEY_RIGHT and current_item and current_item.is_dir():
+            # Expand directory
+            state.expanded_dirs.add(str(current_item))
+            state.rebuild_visible_items()
+        elif key == curses.KEY_LEFT and current_item and current_item.is_dir():
+            # Collapse directory
+            if str(current_item) in state.expanded_dirs:
+                state.expanded_dirs.remove(str(current_item))
+            else:
+                # If already collapsed, go to parent
+                parent = current_item.parent
+                for i, (path, _) in enumerate(state.visible_items):
+                    if path == parent:
+                        state.cursor_pos = i
+                        break
+            state.rebuild_visible_items()
+        elif key == ord(' ') and current_item:
+            # Toggle selection
+            state.toggle_selection(current_item)
+    
+    # Options section controls
+    elif state.active_section == 'options':
+        if key == curses.KEY_UP:
+            state.move_option_cursor(-1)
+        elif key == curses.KEY_DOWN:
+            state.move_option_cursor(1)
+        elif key == ord(' '):
+            # Toggle or edit the current option
+            option_index = state.option_cursor
+            
+            # Fixed options
+            if option_index == 0:  # Format
+                state.toggle_option('format')
+            elif option_index == 1:  # Full Export
+                state.toggle_option('full')
+            elif option_index == 2:  # Debug Mode
+                state.toggle_option('debug')
+            elif option_index == 3:  # SQL Server
+                state.start_editing_option('sql_server')
+            elif option_index == 4:  # SQL Database
+                state.start_editing_option('sql_database')
+            elif option_index == 5 + len(state.options['exclude_patterns']):  # Add exclude pattern
+                state.start_editing_option('new_exclude')
+            elif option_index >= 5 and option_index < 5 + len(state.options['exclude_patterns']):
+                # Remove exclude pattern
+                pattern_index = option_index - 5
+                state.remove_exclude_pattern(pattern_index)
+    
+    # Function key controls (work in any section)
+    if key == curses.KEY_F1:
+        state.toggle_option('format')
+    elif key == curses.KEY_F2:
+        state.toggle_option('full')
+    elif key == curses.KEY_F3:
+        state.toggle_option('debug')
+    elif key == curses.KEY_F4:
+        state.start_editing_option('sql_server')
+    elif key == curses.KEY_F5:
+        state.start_editing_option('sql_database')
+    elif key == curses.KEY_DC:  # Delete key
+        if state.active_section == 'options' and state.option_cursor >= 5 and state.option_cursor < 5 + len(state.options['exclude_patterns']):
+            pattern_index = state.option_cursor - 5
+            state.remove_exclude_pattern(pattern_index)
+    elif key == curses.KEY_IC:  # Insert key
+        state.start_editing_option('new_exclude')
         
     return False
 
 
-def run_menu(path: Path) -> Dict[str, Any]:
+def run_menu(path: Path, initial_settings: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Run the interactive file selection menu.
     
     Args:
         path: Root path to start the file browser
+        initial_settings: Initial settings from command line arguments
         
     Returns:
         Dict with selected paths and settings
@@ -350,8 +640,8 @@ def run_menu(path: Path) -> Dict[str, Any]:
         curses.curs_set(0)  # Hide cursor
         stdscr.timeout(100)  # Non-blocking input with 100ms timeout
         
-        # Initialize menu state
-        state = MenuState(path)
+        # Initialize menu state with initial settings
+        state = MenuState(path, initial_settings)
         state.expanded_dirs.add(str(path))  # Start with root expanded
         state.rebuild_visible_items()
         

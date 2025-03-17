@@ -401,6 +401,24 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
          sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool = True):
+    """
+    Main entry point for the CLI.
+    
+    The interactive menu is enabled by default and allows configuring all options
+    including file selection, output format, SQL settings, and more.
+    
+    Args:
+        path: Path to analyze
+        output: Output directory
+        format: Output format (txt or json)
+        full: Export full file contents
+        debug: Enable debug output
+        sql_server: SQL Server connection string
+        sql_database: SQL Database to analyze
+        sql_config: Path to SQL configuration file
+        exclude: Patterns to exclude
+        interactive: Launch interactive menu (default: True)
+    """
     try:
         # Convert to absolute paths
         path = Path(path).resolve()
@@ -410,22 +428,48 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         include_paths = []
         exclude_paths = []
 
+        # Prepare initial settings for the menu
+        initial_settings = {
+            'format': format,
+            'full': full,
+            'debug': debug,
+            'sql_server': sql_server or '',
+            'sql_database': sql_database or '',
+            'sql_config': sql_config or '',
+            'exclude_patterns': list(exclude) if exclude else []
+        }
+        
         # Launch interactive menu (default behavior)
         try:
             # Import here to avoid circular imports
             from .menu import run_menu
             console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
-            settings = run_menu(Path(path))
+            settings = run_menu(Path(path), initial_settings)
             
             # Update paths based on user selection
             path = settings.get('path', path)
             include_paths = settings.get('include_paths', [])
             exclude_paths = settings.get('exclude_paths', [])
             
+            # Update other settings from menu
+            format = settings.get('format', format)
+            full = settings.get('full', full)
+            debug = settings.get('debug', debug)
+            sql_server = settings.get('sql_server', sql_server)
+            sql_database = settings.get('sql_database', sql_database)
+            sql_config = settings.get('sql_config', sql_config)
+            exclude = settings.get('exclude', exclude)
+            
             if debug:
                 console.print(f"[blue]Selected path: {path}[/]")
                 console.print(f"[blue]Included paths: {len(include_paths)}[/]")
                 console.print(f"[blue]Excluded paths: {len(exclude_paths)}[/]")
+                console.print(f"[blue]Output format: {format}[/]")
+                console.print(f"[blue]Full export: {full}[/]")
+                console.print(f"[blue]Debug mode: {debug}[/]")
+                console.print(f"[blue]SQL Server: {sql_server}[/]")
+                console.print(f"[blue]SQL Database: {sql_database}[/]")
+                console.print(f"[blue]Exclude patterns: {exclude}[/]")
         except Exception as e:
             console.print(f"[yellow]Warning: Interactive menu failed: {str(e)}[/]")
             if debug:

@@ -342,7 +342,8 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
         else:
             # If result is AnalysisResult, convert to dict
             if isinstance(result, AnalysisResult):
-                result_dict = result.dict()  # Use dict() method instead of to_json
+                # Use __dict__ or convert to JSON and back
+                result_dict = json.loads(result.to_json())
             else:
                 result_dict = result
             _combine_fs_results(combined, result_dict)

@@ -8,6 +8,7 @@ import tempfile
 import os
 import sys
 import json
+import curses
 from unittest.mock import patch, MagicMock
 from llm_code_lens.menu import MenuState, run_menu, draw_menu, handle_input
 

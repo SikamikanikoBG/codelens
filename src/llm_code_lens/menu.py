@@ -39,6 +39,8 @@ class MenuState:
             'exclude_patterns': [],    # Patterns to exclude
             'llm_provider': 'claude',  # Default LLM provider
             'llm_options': {           # LLM provider-specific options
+                'provider': 'claude',  # Current provider
+                'prompt_template': 'code_analysis',  # Current template
                 'providers': {
                     'claude': {
                         'api_key': '',
@@ -64,6 +66,14 @@ class MenuState:
                         'temperature': 0.7,
                         'max_tokens': 4000
                     }
+                },
+                'available_providers': ['claude', 'chatgpt', 'gemini', 'local'],
+                'prompt_templates': {
+                    'code_analysis': 'Analyze this code and provide feedback on structure, potential bugs, and improvements:\n\n{code}',
+                    'security_review': 'Review this code for security vulnerabilities and suggest fixes:\n\n{code}',
+                    'documentation': 'Generate documentation for this code:\n\n{code}',
+                    'refactoring': 'Suggest refactoring improvements for this code:\n\n{code}',
+                    'explain': 'Explain how this code works in detail:\n\n{code}'
                 }
             }
         }

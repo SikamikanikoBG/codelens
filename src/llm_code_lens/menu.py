@@ -32,7 +32,36 @@ class MenuState:
             'sql_server': '',          # SQL Server connection string
             'sql_database': '',        # SQL Database to analyze
             'sql_config': '',          # Path to SQL configuration file
-            'exclude_patterns': []     # Patterns to exclude
+            'exclude_patterns': [],    # Patterns to exclude
+            'llm_provider': 'claude',  # Default LLM provider
+            'llm_options': {           # LLM provider-specific options
+                'providers': {
+                    'claude': {
+                        'api_key': '',
+                        'model': 'claude-3-opus-20240229',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'chatgpt': {
+                        'api_key': '',
+                        'model': 'gpt-4-turbo',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'gemini': {
+                        'api_key': '',
+                        'model': 'gemini-pro',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'local': {
+                        'url': 'http://localhost:8000',
+                        'model': 'llama3',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    }
+                }
+            }
         }
         
         # Apply initial settings if provided
@@ -169,6 +198,12 @@ class MenuState:
         if option_name == 'format':
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
+        elif option_name == 'llm_provider':
+            # Cycle through LLM provider options
+            providers = list(self.options['llm_options']['providers'].keys())
+            current_index = providers.index(self.options[option_name]) if self.options[option_name] in providers else 0
+            next_index = (current_index + 1) % len(providers)
+            self.options[option_name] = providers[next_index]
         elif isinstance(self.options[option_name], bool):
             # Toggle boolean options
             self.options[option_name] = not self.options[option_name]
@@ -284,6 +319,8 @@ class MenuState:
             'sql_database': self.options['sql_database'],
             'sql_config': self.options['sql_config'],
             'exclude': self.options['exclude_patterns'],
+            'llm_provider': self.options['llm_provider'],
+            'llm_options': self.options['llm_options'],
             'validation': validation_stats if self.options['debug'] else None
         }
         
@@ -458,7 +495,8 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Full Export", f"{state.options['full']}", "F2"),
             ("Debug Mode", f"{state.options['debug']}", "F3"),
             ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
-            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5")
+            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5"),
+            ("LLM Provider", f"{state.options['llm_provider']}", "F6")
         ]
         
         # Add exclude patterns
@@ -627,7 +665,14 @@ def handle_input(key: int, state: MenuState) -> bool:
                 state.start_editing_option('sql_server')
             elif option_index == 4:  # SQL Database
                 state.start_editing_option('sql_database')
-            elif option_index == 5 + len(state.options['exclude_patterns']):  # Add exclude pattern
+            elif option_index == 5:  # LLM Provider
+                # Cycle through available LLM providers
+                providers = list(state.options['llm_options']['providers'].keys())
+                current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
+                next_index = (current_index + 1) % len(providers)
+                state.options['llm_provider'] = providers[next_index]
+                state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+            elif option_index == 6 + len(state.options['exclude_patterns']):  # Add exclude pattern
                 state.start_editing_option('new_exclude')
             elif option_index >= 5 and option_index < 5 + len(state.options['exclude_patterns']):
                 # Remove exclude pattern
@@ -645,6 +690,13 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.start_editing_option('sql_server')
     elif key == curses.KEY_F5:
         state.start_editing_option('sql_database')
+    elif key == curses.KEY_F6:
+        # Cycle through available LLM providers
+        providers = list(state.options['llm_options']['providers'].keys())
+        current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
+        next_index = (current_index + 1) % len(providers)
+        state.options['llm_provider'] = providers[next_index]
+        state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
     elif key == curses.KEY_DC:  # Delete key
         if state.active_section == 'options' and state.option_cursor >= 5 and state.option_cursor < 5 + len(state.options['exclude_patterns']):
             pattern_index = state.option_cursor - 5

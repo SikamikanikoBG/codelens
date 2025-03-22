@@ -371,6 +371,66 @@ class MenuState:
         except Exception as e:
             # Log the error instead of silently failing
             self.status_message = f"Error loading menu state: {str(e)}"
+            
+    def _open_in_llm(self) -> bool:
+        """
+        Open selected files in the configured LLM provider.
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get the current item
+            current_item = self.get_current_item()
+            if not current_item or not current_item.is_file():
+                self.status_message = "Please select a file to open in LLM"
+                return False
+                
+            # Check if file exists and is readable
+            if not current_item.exists() or not os.access(current_item, os.R_OK):
+                self.status_message = f"Cannot read file: {current_item}"
+                return False
+                
+            # Get the provider configuration
+            provider = self.options['llm_provider']
+            provider_config = self.options['llm_options']['providers'].get(provider)
+            
+            if not provider_config:
+                self.status_message = f"Provider '{provider}' not configured"
+                return False
+                
+            # Read the file content
+            try:
+                with open(current_item, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except UnicodeDecodeError:
+                # Try with a different encoding or binary mode
+                try:
+                    with open(current_item, 'r', encoding='latin-1') as f:
+                        content = f.read()
+                except Exception as e:
+                    self.status_message = f"Error reading file: {str(e)}"
+                    return False
+                    
+            # Check if content is too large (simple check)
+            if len(content) > 100000:  # 100KB limit
+                self.status_message = "File is too large to send to LLM"
+                return False
+                
+            # Prepare message for LLM
+            file_ext = current_item.suffix.lstrip('.')
+            message = f"Here is the content of {current_item.name} (a {file_ext} file):\n\n```{file_ext}\n{content}\n```\n\nPlease analyze this code and provide feedback."
+            
+            # TODO: Implement actual API calls to different LLM providers
+            # This would require importing the appropriate libraries and handling API keys
+            
+            # For now, just show a success message
+            self.status_message = f"File would be sent to {provider} (API integration not implemented)"
+            return True
+            
+        except Exception as e:
+            self.status_message = f"Error opening in LLM: {str(e)}"
+            return False
 
 
 def draw_menu(stdscr, state: MenuState) -> None:
@@ -544,7 +604,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls
-        controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | Tab: Options | Enter: Confirm "
+        controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | F7: Open in LLM | Tab: Options | Enter: Confirm "
     else:
         # Show options controls
         controls = " Up/Down: Navigate | Space: Toggle/Edit | Tab: Files | Enter: Confirm "
@@ -697,6 +757,9 @@ def handle_input(key: int, state: MenuState) -> bool:
         next_index = (current_index + 1) % len(providers)
         state.options['llm_provider'] = providers[next_index]
         state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+    elif key == curses.KEY_F7:
+        # Open current file in LLM
+        state._open_in_llm()
     elif key == curses.KEY_DC:  # Delete key
         if state.active_section == 'options' and state.option_cursor >= 5 and state.option_cursor < 5 + len(state.options['exclude_patterns']):
             pattern_index = state.option_cursor - 5

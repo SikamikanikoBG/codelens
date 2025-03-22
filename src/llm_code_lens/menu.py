@@ -5,6 +5,10 @@ Provides a TUI for selecting files and directories to include/exclude in analysi
 
 import curses
 import os
+import platform
+import subprocess
+import tempfile
+import webbrowser
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Set, Optional
 

@@ -224,9 +224,8 @@ class SQLServerAnalyzer:
         if objects:
             analysis['objects'] = objects
         
-        # Extract and update parameters with comments
+        # Extract parameters with comments
         params = self._extract_parameters(content)
-        self._update_params_with_comments(params, content)
         if params:
             analysis['parameters'] = params
         
@@ -323,10 +322,7 @@ class SQLServerAnalyzer:
                     
                     params.append(param_info)
         
-        return params
-
-    def _update_params_with_comments(self, params: List[dict], content: str) -> None:
-        """Update parameter documentation from nearby comments."""
+        # Update parameter documentation from nearby comments
         lines = content.splitlines()
         for i, line in enumerate(lines):
             if '--' in line and any(param['name'] in line for param in params):
@@ -339,6 +335,8 @@ class SQLServerAnalyzer:
                     param = next(p for p in params if p['name'] == param_name)
                     if 'description' not in param:
                         param['description'] = comment
+        
+        return params
 
     def _extract_dependencies(self, content: str) -> List[str]:
         """Extract table and view dependencies."""

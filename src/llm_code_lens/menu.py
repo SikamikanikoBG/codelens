@@ -5,9 +5,6 @@ Provides a TUI for selecting files and directories to include/exclude in analysi
 
 import curses
 import os
-import platform
-import subprocess
-import tempfile
 import webbrowser
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Set, Optional
@@ -393,58 +390,23 @@ class MenuState:
         Returns:
             bool: True if successful, False otherwise
         """
-        try:
-            # Get the current item
-            current_item = self.get_current_item()
-            if not current_item or not current_item.is_file():
-                self.status_message = "Please select a file to open in LLM"
-                return False
-                
-            # Check if file exists and is readable
-            if not current_item.exists() or not os.access(current_item, os.R_OK):
-                self.status_message = f"Cannot read file: {current_item}"
-                return False
-                
-            # Get the provider configuration
-            provider = self.options['llm_provider']
-            provider_config = self.options['llm_options']['providers'].get(provider)
-            
-            if not provider_config:
-                self.status_message = f"Provider '{provider}' not configured"
-                return False
-                
-            # Read the file content
-            try:
-                with open(current_item, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except UnicodeDecodeError:
-                # Try with a different encoding or binary mode
-                try:
-                    with open(current_item, 'r', encoding='latin-1') as f:
-                        content = f.read()
-                except Exception as e:
-                    self.status_message = f"Error reading file: {str(e)}"
-                    return False
-                    
-            # Check if content is too large (simple check)
-            if len(content) > 100000:  # 100KB limit
-                self.status_message = "File is too large to send to LLM"
-                return False
-                
-            # Prepare message for LLM
-            file_ext = current_item.suffix.lstrip('.')
-            message = f"Here is the content of {current_item.name} (a {file_ext} file):\n\n```{file_ext}\n{content}\n```\n\nPlease analyze this code and provide feedback."
-            
-            # TODO: Implement actual API calls to different LLM providers
-            # This would require importing the appropriate libraries and handling API keys
-            
-            # For now, just show a success message
-            self.status_message = f"File would be sent to {provider} (API integration not implemented)"
-            return True
-            
-        except Exception as e:
-            self.status_message = f"Error opening in LLM: {str(e)}"
+        # Get the current item
+        current_item = self.get_current_item()
+        if not current_item or not current_item.is_file():
+            self.status_message = "Please select a file to open in LLM"
             return False
+            
+        # Check if file exists and is readable
+        if not current_item.exists() or not os.access(current_item, os.R_OK):
+            self.status_message = f"Cannot read file: {current_item}"
+            return False
+            
+        # Get the provider name
+        provider = self.options['llm_provider']
+        
+        # Show a message that this feature is not yet implemented
+        self.status_message = f"Opening in {provider} is not yet implemented"
+        return False
 
 
 def draw_menu(stdscr, state: MenuState) -> None:

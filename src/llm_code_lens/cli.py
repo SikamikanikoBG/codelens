@@ -17,10 +17,6 @@ import os
 import json
 import shutil
 import webbrowser
-import urllib.parse
-import tempfile
-import platform
-import subprocess
 import sys
 
 console = Console()
@@ -653,11 +649,16 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         
         # Pass include/exclude paths to analyzer if they were set in interactive mode
         if interactive and (include_paths or exclude_paths):
-            # Modify the analyzer's _collect_files method to respect include/exclude paths
-            original_collect_files = analyzer._collect_files
-            
-            def filtered_collect_files(self, path: Path) -> List[Path]:
-                files = original_collect_files(path)
+            # Create a custom file collection function that respects include/exclude paths
+            def custom_collect_files(path: Path) -> List[Path]:
+                # Get all files that match the analyzer's supported extensions
+                files = []
+                for file_path in path.rglob('*'):
+                    if (file_path.is_file() and 
+                        file_path.suffix.lower() in analyzer.analyzers):
+                        files.append(file_path)
+                
+                # Apply include/exclude filters
                 filtered_files = []
                 excluded_files = []
                 
@@ -706,7 +707,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 return filtered_files
             
             # Replace the method
-            analyzer._collect_files = filtered_collect_files.__get__(analyzer, ProjectAnalyzer)
+            analyzer._collect_files = custom_collect_files
             
             if debug:
                 console.print(f"[blue]Using custom file collection with filters[/]")

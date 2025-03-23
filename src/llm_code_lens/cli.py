@@ -411,88 +411,63 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
         bool: True if successful, False otherwise
     """
     try:
-        # Prepare the content to send to the LLM
-        content = []
-        
-        # Add the analysis file
-        analysis_file = output_path / 'analysis.txt'
-        if analysis_file.exists():
-            content.append(f"# Code Analysis Results\n\n```\n{analysis_file.read_text(encoding='utf-8')}\n```\n\n")
-        
-        # Add full content files if they exist
-        full_files = list(output_path.glob('full_*.txt'))
-        if full_files:
-            content.append("# Full Code Content\n\n")
-            for file in sorted(full_files):
-                content.append(f"## {file.name}\n\n```\n{file.read_text(encoding='utf-8')}\n```\n\n")
-        
-        # Add SQL content files if they exist
-        sql_files = list(output_path.glob('sql_full_*.txt'))
-        if sql_files:
-            content.append("# SQL Objects\n\n")
-            for file in sorted(sql_files):
-                content.append(f"## {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n")
-        
-        # Add a predefined prompt
-        prompt = """
-I've shared the code analysis of my project with you. Please help me understand:
-1. The overall structure and architecture
-2. Key components and their relationships
-3. Any potential issues or areas for improvement
-4. Suggestions for better code organization or design patterns
+        # Define the system prompt
+        system_prompt = """You are an experienced developer and software architect. 
+I'm sharing a codebase (or summary of a codebase) with you.
 
-Feel free to ask questions if you need more information about specific parts of the code.
+Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
+
+Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required.
+
+In my next message, I'll tell you about a new request or question about this code.
 """
-        content.append(prompt)
-        
-        # Combine all content
-        full_content = "\n".join(content)
-        
-        # Open in the appropriate provider
-        if provider.lower() == 'claude':
-            # Create a temporary HTML file with auto-submit form to Claude
-            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as f:
-                html_content = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Redirecting to Claude...</title>
-                    <script>
-                        window.onload = function() {{
-                            // Set the content in the textarea
-                            document.getElementById('content').value = {json.dumps(full_content)};
-                            // Submit the form
-                            document.getElementById('claudeForm').submit();
-                        }};
-                    </script>
-                </head>
-                <body>
-                    <h1>Redirecting to Claude...</h1>
-                    <p>If you are not redirected automatically, click the button below:</p>
-                    <form id="claudeForm" action="https://claude.ai/chat" method="get">
-                        <input type="hidden" name="content" id="content" value="">
-                        <button type="submit">Go to Claude</button>
-                    </form>
-                </body>
-                </html>
-                """
-                f.write(html_content)
-                temp_file_path = f.name
+
+        # Create a temporary file to help with copying
+        with tempfile.NamedTemporaryFile('w', delete=False, suffix='.txt') as f:
+            # First write the system prompt
+            f.write(system_prompt + "\n\n")
             
-            # Open the HTML file in the default browser
-            webbrowser.open('file://' + temp_file_path)
-            return True
+            # Add instructions for the user
+            f.write("--- INSTRUCTIONS FOR USER ---\n")
+            f.write("1. Copy everything above this line and paste it into Claude\n")
+            f.write("2. Copy the files below and attach them to the chat\n")
+            f.write("3. Press Enter to submit\n\n")
             
-        elif provider.lower() == 'chatgpt':
-            # For ChatGPT, create a temp file with the content for easy copying
-            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.md') as f:
-                f.write(full_content)
-                temp_file_path = f.name
+            # Add a separator
+            f.write("--- FILES TO ATTACH ---\n\n")
+            
+            # List the files to attach
+            # Check if full export is enabled by looking for full_*.txt files
+            full = len(list(output_path.glob('full_*.txt'))) > 0
+            if not full:
+                # Just list the analysis file
+                f.write("Attach this file:\n")
+                f.write(f"- {output_path / 'analysis.txt'}\n")
+            else:
+                # List all full content files
+                f.write("Attach these files:\n")
                 
-            # Open ChatGPT in the browser
-            webbrowser.open("https://chat.openai.com/")
+                # Analysis file
+                f.write(f"- {output_path / 'analysis.txt'}\n")
+                
+                # Full content files
+                full_files = list(output_path.glob('full_*.txt'))
+                for file in sorted(full_files):
+                    f.write(f"- {file}\n")
+                
+                # SQL content files
+                sql_files = list(output_path.glob('sql_full_*.txt'))
+                for file in sorted(sql_files):
+                    f.write(f"- {file}\n")
             
-            # Try to open the temp file with the default text editor
+            temp_file_path = f.name
+        
+        # Open the appropriate provider
+        if provider.lower() == 'claude':
+            # Open Claude in a new chat
+            webbrowser.open("https://claude.ai/new")
+            
+            # Open the temp file with instructions
             try:
                 if platform.system() == 'Windows':
                     os.startfile(temp_file_path)
@@ -500,13 +475,42 @@ Feel free to ask questions if you need more information about specific parts of 
                     subprocess.call(['open', temp_file_path])
                 else:  # Linux
                     subprocess.call(['xdg-open', temp_file_path])
+                    
+                console.print("[green]Claude opened in browser. Follow the instructions in the opened text file.[/]")
+                console.print("[green]1. Copy the system prompt and paste it into Claude[/]")
+                console.print("[green]2. Attach the listed files to the chat[/]")
+                console.print("[green]3. Press Enter to submit[/]")
+                return True
             except Exception as e:
-                console.print(f"[yellow]Note: Could not open content file automatically: {str(e)}[/]")
-                console.print(f"[yellow]Content saved to: {temp_file_path}[/]")
+                console.print(f"[yellow]Could not open instructions file: {str(e)}[/]")
+                console.print(f"[yellow]Instructions saved to: {temp_file_path}[/]")
+                console.print("[green]Claude opened in browser. Please follow these steps:[/]")
+                console.print(f"[green]1. Open the file at {temp_file_path}[/]")
+                console.print("[green]2. Copy the system prompt and paste it into Claude[/]")
+                console.print("[green]3. Attach the listed files to the chat[/]")
+                console.print("[green]4. Press Enter to submit[/]")
+                return True
                 
-            console.print("[yellow]Note: ChatGPT doesn't support direct content passing. Please copy-paste from the opened file.[/]")
-            return True
+        elif provider.lower() == 'chatgpt':
+            # Open ChatGPT
+            webbrowser.open("https://chat.openai.com/")
             
+            # Open the temp file with instructions
+            try:
+                if platform.system() == 'Windows':
+                    os.startfile(temp_file_path)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.call(['open', temp_file_path])
+                else:  # Linux
+                    subprocess.call(['xdg-open', temp_file_path])
+                    
+                console.print("[green]ChatGPT opened in browser. Follow the instructions in the opened text file.[/]")
+                return True
+            except Exception as e:
+                console.print(f"[yellow]Could not open instructions file: {str(e)}[/]")
+                console.print(f"[yellow]Instructions saved to: {temp_file_path}[/]")
+                return True
+                
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
             return False

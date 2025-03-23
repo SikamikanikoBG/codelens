@@ -550,6 +550,11 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
             settings = run_menu(Path(path), initial_settings)
             
+            # Check if user cancelled
+            if settings.get('cancelled', False):
+                console.print("[yellow]Operation cancelled by user[/]")
+                return 0
+            
             # Update paths based on user selection
             path = settings.get('path', path)
             include_paths = settings.get('include_paths', [])

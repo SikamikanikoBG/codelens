@@ -24,6 +24,7 @@ class MenuState:
         self.visible_items: List[Tuple[Path, int]] = []  # (path, depth)
         self.max_visible = 0
         self.status_message = ""
+        self.cancelled = False  # Flag to indicate if user cancelled
         
         # CLI options
         self.options = {
@@ -273,8 +274,8 @@ class MenuState:
     
     def move_option_cursor(self, direction: int) -> None:
         """Move the cursor in the options section."""
-        # Count total options (fixed options + exclude patterns + add exclude option)
-        total_options = 6 + len(self.options['exclude_patterns']) + 1  # 6 fixed options + exclude patterns + add option
+        # Count total options (fixed options + exclude patterns)
+        total_options = 6 + len(self.options['exclude_patterns'])  # 6 fixed options + exclude patterns
         
         new_pos = self.option_cursor + direction
         if 0 <= new_pos < total_options:
@@ -316,7 +317,8 @@ class MenuState:
             print(status_message)
         
         # Save state for future runs
-        self._save_state()
+        if not self.cancelled:
+            self._save_state()
         
         # Return all settings
         return {
@@ -332,7 +334,8 @@ class MenuState:
             'exclude': self.options['exclude_patterns'],
             'open_in_llm': self.options['llm_provider'],
             'llm_options': self.options['llm_options'],
-            'validation': validation_stats if self.options['debug'] else None
+            'validation': validation_stats if self.options['debug'] else None,
+            'cancelled': self.cancelled
         }
         
     def _save_state(self) -> None:
@@ -445,19 +448,29 @@ def draw_menu(stdscr, state: MenuState) -> None:
     except curses.error:
         pass
     
-    # Draw section indicator
+    # Draw section indicator with improved visibility
     section_y = 1
     files_section = " [F]iles "
     options_section = " [O]ptions "
+    tab_hint = " [Tab] to switch sections "
+    esc_hint = " [Esc] to cancel "
     
     try:
-        # Files section indicator
+        # Files section indicator with better highlighting
         attr = curses.color_pair(7) if state.active_section == 'files' else curses.color_pair(1)
         stdscr.addstr(section_y, 2, files_section, attr)
         
         # Options section indicator
         attr = curses.color_pair(7) if state.active_section == 'options' else curses.color_pair(1)
         stdscr.addstr(section_y, 2 + len(files_section) + 2, options_section, attr)
+        
+        # Add Tab hint in the middle
+        middle_pos = max_x // 2 - len(tab_hint) // 2
+        stdscr.addstr(section_y, middle_pos, tab_hint, curses.color_pair(6))
+        
+        # Add Escape hint on the right
+        right_pos = max_x - len(esc_hint) - 2
+        stdscr.addstr(section_y, right_pos, esc_hint, curses.color_pair(6))
     except curses.error:
         pass
     
@@ -539,9 +552,6 @@ def draw_menu(stdscr, state: MenuState) -> None:
         for i, pattern in enumerate(state.options['exclude_patterns']):
             options.append((f"Exclude Pattern {i+1}", pattern, "Del"))
         
-        # Option to add new exclude pattern
-        options.append(("Add Exclude Pattern", "", "Ins"))
-        
         # Draw each option
         for i, (name, value, key) in enumerate(options):
             if option_y + i >= max_y - 2:  # Don't draw past footer
@@ -572,18 +582,18 @@ def draw_menu(stdscr, state: MenuState) -> None:
     except curses.error:
         pass
     
-    # Draw footer with controls
+    # Draw footer with improved controls
     footer_y = max_y - 2
     
     if state.editing_option:
         # Show editing controls
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
-        # Show file navigation controls
-        controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | F7: Open in LLM | Tab: Options | Enter: Confirm "
+        # Show file navigation controls with better organization
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
-        controls = " Up/Down: Navigate | Space: Toggle/Edit | Tab: Files | Enter: Confirm "
+        controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
         
     controls = controls.center(max_x-1, "=")
     try:
@@ -639,13 +649,20 @@ def handle_input(key: int, state: MenuState) -> bool:
         return False
     
     # Handle normal navigation mode
-    if key == 9:  # Tab key
+    if key == 27:  # Escape key
+        # Cancel and exit
+        state.cancelled = True
+        state.status_message = "Operation cancelled by user"
+        return True
+    elif key == 9:  # Tab key
         state.toggle_section()
     elif key == 10:  # Enter key
         # Confirm selection and exit
         return True
     elif key == ord('q'):
         # Quit without saving
+        state.cancelled = True
+        state.status_message = "Operation cancelled by user"
         return True
     elif key == ord('f') or key == ord('F'):
         state.active_section = 'files'
@@ -703,8 +720,6 @@ def handle_input(key: int, state: MenuState) -> bool:
                 state.start_editing_option('sql_database')
             elif option_index == 5:  # LLM Provider
                 state.toggle_option('llm_provider')
-            elif option_index == 6 + len(state.options['exclude_patterns']):  # Add exclude pattern
-                state.start_editing_option('new_exclude')
             elif option_index >= 6 and option_index < 6 + len(state.options['exclude_patterns']):
                 # Remove exclude pattern
                 pattern_index = option_index - 6
@@ -735,8 +750,7 @@ def handle_input(key: int, state: MenuState) -> bool:
         if state.active_section == 'options' and state.option_cursor >= 6 and state.option_cursor < 6 + len(state.options['exclude_patterns']):
             pattern_index = state.option_cursor - 6
             state.remove_exclude_pattern(pattern_index)
-    elif key == curses.KEY_IC:  # Insert key
-        state.start_editing_option('new_exclude')
+    # Insert key handling removed
         
     return False
 

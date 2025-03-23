@@ -1,4 +1,11 @@
-## [0.5.0] - 2025-04-15
+## [0.5.1] - 2025-03-23
+
+### Fixed
+- Added pyperclip dependency for clipboard operations with LLM providers
+- Improved error handling for missing dependencies
+- Fixed runtime package installation issues
+
+## [0.5.0] - 2025-03-23
 
 ### Added
 - Added option to open analysis results directly in LLM providers (Claude, ChatGPT, Gemini)

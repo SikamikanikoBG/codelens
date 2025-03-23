@@ -276,8 +276,8 @@ class MenuState:
     
     def move_option_cursor(self, direction: int) -> None:
         """Move the cursor in the options section."""
-        # Count total options (fixed options + exclude patterns)
-        total_options = 5 + len(self.options['exclude_patterns'])  # 5 fixed options
+        # Count total options (fixed options + exclude patterns + add exclude option)
+        total_options = 6 + len(self.options['exclude_patterns']) + 1  # 6 fixed options + exclude patterns + add option
         
         new_pos = self.option_cursor + direction
         if 0 <= new_pos < total_options:

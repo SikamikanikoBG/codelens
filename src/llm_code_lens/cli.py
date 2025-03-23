@@ -16,6 +16,8 @@ import traceback
 import os
 import json
 import shutil
+import webbrowser
+import urllib.parse
 
 console = Console()
 
@@ -393,6 +395,82 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
         combined['files'][key] = func
 
 
+def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) -> bool:
+    """
+    Open the analysis results in a browser with the specified LLM provider.
+    
+    Args:
+        provider: The LLM provider to use (claude, chatgpt, etc.)
+        output_path: Path to the output directory containing analysis files
+        debug: Enable debug output
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Prepare the content to send to the LLM
+        content = []
+        
+        # Add the analysis file
+        analysis_file = output_path / 'analysis.txt'
+        if analysis_file.exists():
+            content.append(f"# Code Analysis Results\n\n```\n{analysis_file.read_text(encoding='utf-8')}\n```\n\n")
+        
+        # Add full content files if they exist
+        full_files = list(output_path.glob('full_*.txt'))
+        if full_files:
+            content.append("# Full Code Content\n\n")
+            for file in sorted(full_files):
+                content.append(f"## {file.name}\n\n```\n{file.read_text(encoding='utf-8')}\n```\n\n")
+        
+        # Add SQL content files if they exist
+        sql_files = list(output_path.glob('sql_full_*.txt'))
+        if sql_files:
+            content.append("# SQL Objects\n\n")
+            for file in sorted(sql_files):
+                content.append(f"## {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n")
+        
+        # Add a predefined prompt
+        prompt = """
+I've shared the code analysis of my project with you. Please help me understand:
+1. The overall structure and architecture
+2. Key components and their relationships
+3. Any potential issues or areas for improvement
+4. Suggestions for better code organization or design patterns
+
+Feel free to ask questions if you need more information about specific parts of the code.
+"""
+        content.append(prompt)
+        
+        # Combine all content
+        full_content = "\n".join(content)
+        
+        # Open in the appropriate provider
+        if provider.lower() == 'claude':
+            # URL encode the content for Claude
+            encoded_content = urllib.parse.quote(full_content)
+            claude_url = f"https://claude.ai/chat?content={encoded_content}"
+            
+            # Open the URL in the default browser
+            webbrowser.open(claude_url)
+            return True
+        elif provider.lower() == 'chatgpt':
+            # ChatGPT doesn't support direct content passing via URL
+            # Just open the site and let the user paste manually
+            webbrowser.open("https://chat.openai.com/")
+            console.print("[yellow]Note: ChatGPT doesn't support direct content passing. Please copy-paste manually.[/]")
+            return True
+        else:
+            console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
+            return False
+            
+    except Exception as e:
+        console.print(f"[red]Error opening in LLM: {str(e)}[/]")
+        if debug:
+            console.print(traceback.format_exc())
+        return False
+
+
 
 
 @click.command()
@@ -406,8 +484,10 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
 @click.option('--sql-config', help='Path to SQL configuration file')
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
+@click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt)', default=None)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
-         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool = True):
+         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, 
+         interactive: bool = True, open_in_llm: str = None):
     """
     Main entry point for the CLI.
     
@@ -443,7 +523,8 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             'sql_server': sql_server or '',
             'sql_database': sql_database or '',
             'sql_config': sql_config or '',
-            'exclude_patterns': list(exclude) if exclude else []
+            'exclude_patterns': list(exclude) if exclude else [],
+            'open_in_llm': open_in_llm or ''
         }
         
         # Launch interactive menu (default behavior)
@@ -466,6 +547,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             sql_database = settings.get('sql_database', sql_database)
             sql_config = settings.get('sql_config', sql_config)
             exclude = settings.get('exclude', exclude)
+            open_in_llm = settings.get('open_in_llm', open_in_llm)
             
             if debug:
                 console.print(f"[blue]Selected path: {path}[/]")
@@ -644,6 +726,14 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 console.print(f"[yellow]Warning during full export: {str(e)}[/]")
                 if debug:
                     console.print(traceback.format_exc())
+
+        # Open in LLM if requested
+        if open_in_llm:
+            console.print(f"[bold blue]🌐 Opening results in {open_in_llm}...[/]")
+            if open_in_llm_provider(open_in_llm, output_path, debug):
+                console.print(f"[bold green]✨ Results opened in {open_in_llm}![/]")
+            else:
+                console.print(f"[yellow]Failed to open results in {open_in_llm}[/]")
 
         # Friendly message to prompt users to give a star
         console.print("\n [bold yellow] ⭐⭐⭐⭐⭐ If you like this tool, please consider giving it a star on GitHub![/]")

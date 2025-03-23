@@ -65,7 +65,7 @@ class MenuState:
                         'max_tokens': 4000
                     }
                 },
-                'available_providers': ['claude', 'chatgpt', 'gemini', 'local'],
+                'available_providers': ['claude', 'chatgpt', 'gemini', 'local', 'none'],
                 'prompt_templates': {
                     'code_analysis': 'Analyze this code and provide feedback on structure, potential bugs, and improvements:\n\n{code}',
                     'security_review': 'Review this code for security vulnerabilities and suggest fixes:\n\n{code}',
@@ -211,8 +211,8 @@ class MenuState:
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
         elif option_name == 'llm_provider':
-            # Cycle through LLM provider options
-            providers = list(self.options['llm_options']['providers'].keys())
+            # Cycle through LLM provider options including 'none'
+            providers = list(self.options['llm_options']['providers'].keys()) + ['none']
             current_index = providers.index(self.options[option_name]) if self.options[option_name] in providers else 0
             next_index = (current_index + 1) % len(providers)
             self.options[option_name] = providers[next_index]
@@ -393,6 +393,14 @@ class MenuState:
         Returns:
             bool: True if successful, False otherwise
         """
+        # Get the provider name
+        provider = self.options['llm_provider']
+        
+        # Handle 'none' option
+        if provider.lower() == 'none':
+            self.status_message = "LLM integration is disabled (set to 'none')"
+            return True
+            
         # Get the current item
         current_item = self.get_current_item()
         if not current_item or not current_item.is_file():
@@ -403,9 +411,6 @@ class MenuState:
         if not current_item.exists() or not os.access(current_item, os.R_OK):
             self.status_message = f"Cannot read file: {current_item}"
             return False
-            
-        # Get the provider name
-        provider = self.options['llm_provider']
         
         # Show a message that this feature is not yet implemented
         self.status_message = f"Opening in {provider} is not yet implemented"
@@ -737,8 +742,8 @@ def handle_input(key: int, state: MenuState) -> bool:
     elif key == curses.KEY_F5:
         state.start_editing_option('sql_database')
     elif key == curses.KEY_F6:
-        # Cycle through available LLM providers
-        providers = list(state.options['llm_options']['providers'].keys())
+        # Cycle through available LLM providers including 'none'
+        providers = list(state.options['llm_options']['providers'].keys()) + ['none']
         current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
         next_index = (current_index + 1) % len(providers)
         state.options['llm_provider'] = providers[next_index]

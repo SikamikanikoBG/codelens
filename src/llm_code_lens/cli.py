@@ -401,13 +401,18 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
     Open the analysis results in a browser with the specified LLM provider.
     
     Args:
-        provider: The LLM provider to use (claude, chatgpt, etc.)
+        provider: The LLM provider to use (claude, chatgpt, gemini, none, etc.)
         output_path: Path to the output directory containing analysis files
         debug: Enable debug output
         
     Returns:
         bool: True if successful, False otherwise
     """
+    # Handle 'none' option - return success without opening anything
+    if provider and provider.lower() == 'none':
+        console.print("[green]Skipping browser opening as requested.[/]")
+        return True
+        
     try:
         # Import pyperclip for clipboard operations
         try:
@@ -475,6 +480,18 @@ In my next message, I'll tell you about a new request or question about this cod
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
             console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
             return True
+            
+        elif provider.lower() == 'gemini':
+            # Open Gemini
+            webbrowser.open("https://gemini.google.com/")
+            
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
+            
+            console.print("[green]Gemini opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in Gemini to paste everything at once![/]")
+            return True
                 
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
@@ -500,7 +517,7 @@ In my next message, I'll tell you about a new request or question about this cod
 @click.option('--sql-config', help='Path to SQL configuration file')
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
-@click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt)', default=None)
+@click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt, gemini, none)', default=None)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
          sql_server: str, sql_database: str, sql_config: str, exclude: tuple, 
          interactive: bool = True, open_in_llm: str = None):
@@ -753,8 +770,8 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 if debug:
                     console.print(traceback.format_exc())
 
-        # Open in LLM if requested
-        if open_in_llm:
+        # Open in LLM if requested and not 'none'
+        if open_in_llm and open_in_llm.lower() != 'none':
             console.print(f"[bold blue]🌐 Opening results in {open_in_llm}...[/]")
             if open_in_llm_provider(open_in_llm, output_path, debug):
                 console.print(f"[bold green]✨ Results opened in {open_in_llm}![/]")

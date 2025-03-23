@@ -21,6 +21,7 @@ import urllib.parse
 import tempfile
 import platform
 import subprocess
+import sys
 
 console = Console()
 
@@ -411,6 +412,14 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
         bool: True if successful, False otherwise
     """
     try:
+        # Import pyperclip for clipboard operations
+        try:
+            import pyperclip
+        except ImportError:
+            console.print("[yellow]pyperclip module not found. Installing it now...[/]")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyperclip"])
+            import pyperclip
+        
         # Define the system prompt
         system_prompt = """You are an experienced developer and software architect. 
 I'm sharing a codebase (or summary of a codebase) with you.
@@ -421,95 +430,91 @@ Your instructions should specify exactly what needs to be done in which file and
 
 In my next message, I'll tell you about a new request or question about this code.
 """
-
-        # Create a temporary file to help with copying
-        with tempfile.NamedTemporaryFile('w', delete=False, suffix='.txt') as f:
-            # First write the system prompt
-            f.write(system_prompt + "\n\n")
-            
-            # Add instructions for the user
-            f.write("--- INSTRUCTIONS FOR USER ---\n")
-            f.write("1. Copy everything above this line and paste it into Claude\n")
-            f.write("2. Copy the files below and attach them to the chat\n")
-            f.write("3. Press Enter to submit\n\n")
-            
-            # Add a separator
-            f.write("--- FILES TO ATTACH ---\n\n")
-            
-            # List the files to attach
-            # Check if full export is enabled by looking for full_*.txt files
-            full = len(list(output_path.glob('full_*.txt'))) > 0
-            if not full:
-                # Just list the analysis file
-                f.write("Attach this file:\n")
-                f.write(f"- {output_path / 'analysis.txt'}\n")
-            else:
-                # List all full content files
-                f.write("Attach these files:\n")
-                
-                # Analysis file
-                f.write(f"- {output_path / 'analysis.txt'}\n")
-                
-                # Full content files
-                full_files = list(output_path.glob('full_*.txt'))
-                for file in sorted(full_files):
-                    f.write(f"- {file}\n")
-                
-                # SQL content files
-                sql_files = list(output_path.glob('sql_full_*.txt'))
-                for file in sorted(sql_files):
-                    f.write(f"- {file}\n")
-            
-            temp_file_path = f.name
         
         # Open the appropriate provider
         if provider.lower() == 'claude':
             # Open Claude in a new chat
             webbrowser.open("https://claude.ai/new")
             
-            # Open the temp file with instructions
-            try:
-                if platform.system() == 'Windows':
-                    os.startfile(temp_file_path)
-                elif platform.system() == 'Darwin':  # macOS
-                    subprocess.call(['open', temp_file_path])
-                else:  # Linux
-                    subprocess.call(['xdg-open', temp_file_path])
-                    
-                console.print("[green]Claude opened in browser. Follow the instructions in the opened text file.[/]")
-                console.print("[green]1. Copy the system prompt and paste it into Claude[/]")
-                console.print("[green]2. Attach the listed files to the chat[/]")
-                console.print("[green]3. Press Enter to submit[/]")
-                return True
-            except Exception as e:
-                console.print(f"[yellow]Could not open instructions file: {str(e)}[/]")
-                console.print(f"[yellow]Instructions saved to: {temp_file_path}[/]")
-                console.print("[green]Claude opened in browser. Please follow these steps:[/]")
-                console.print(f"[green]1. Open the file at {temp_file_path}[/]")
-                console.print("[green]2. Copy the system prompt and paste it into Claude[/]")
-                console.print("[green]3. Attach the listed files to the chat[/]")
-                console.print("[green]4. Press Enter to submit[/]")
-                return True
+            # Copy the system prompt to clipboard
+            pyperclip.copy(system_prompt)
+            
+            console.print("[green]Claude opened in browser. Follow these steps:[/]")
+            console.print("[green]1. The system prompt has been copied to your clipboard[/]")
+            console.print("[green]2. Paste it into Claude (Ctrl+V)[/]")
+            
+            # Check if full export is enabled by looking for full_*.txt files
+            full = len(list(output_path.glob('full_*.txt'))) > 0
+            
+            # Wait for user to confirm they've pasted the system prompt
+            console.print("[yellow]Press Enter after you've pasted the system prompt into Claude...[/]", end="")
+            input()
+            
+            # Now help them attach the files
+            console.print("[green]3. Now attach these files to Claude:[/]")
+            
+            if not full:
+                # Just list the analysis file
+                analysis_file = output_path / 'analysis.txt'
+                console.print(f"[green]   - {analysis_file}[/]")
+            else:
+                # List all full content files
+                console.print(f"[green]   - {output_path / 'analysis.txt'}[/]")
+                
+                # Full content files
+                full_files = list(output_path.glob('full_*.txt'))
+                for file in sorted(full_files):
+                    console.print(f"[green]   - {file}[/]")
+                
+                # SQL content files
+                sql_files = list(output_path.glob('sql_full_*.txt'))
+                for file in sorted(sql_files):
+                    console.print(f"[green]   - {file}[/]")
+            
+            console.print("[green]4. Press Enter in Claude to submit[/]")
+            return True
                 
         elif provider.lower() == 'chatgpt':
             # Open ChatGPT
             webbrowser.open("https://chat.openai.com/")
             
-            # Open the temp file with instructions
-            try:
-                if platform.system() == 'Windows':
-                    os.startfile(temp_file_path)
-                elif platform.system() == 'Darwin':  # macOS
-                    subprocess.call(['open', temp_file_path])
-                else:  # Linux
-                    subprocess.call(['xdg-open', temp_file_path])
-                    
-                console.print("[green]ChatGPT opened in browser. Follow the instructions in the opened text file.[/]")
-                return True
-            except Exception as e:
-                console.print(f"[yellow]Could not open instructions file: {str(e)}[/]")
-                console.print(f"[yellow]Instructions saved to: {temp_file_path}[/]")
-                return True
+            # Copy the system prompt to clipboard
+            pyperclip.copy(system_prompt)
+            
+            console.print("[green]ChatGPT opened in browser. Follow these steps:[/]")
+            console.print("[green]1. The system prompt has been copied to your clipboard[/]")
+            console.print("[green]2. Paste it into ChatGPT (Ctrl+V)[/]")
+            
+            # Check if full export is enabled
+            full = len(list(output_path.glob('full_*.txt'))) > 0
+            
+            # Wait for user to confirm they've pasted the system prompt
+            console.print("[yellow]Press Enter after you've pasted the system prompt into ChatGPT...[/]", end="")
+            input()
+            
+            # Now help them attach the files
+            console.print("[green]3. Now attach these files to ChatGPT:[/]")
+            
+            if not full:
+                # Just list the analysis file
+                analysis_file = output_path / 'analysis.txt'
+                console.print(f"[green]   - {analysis_file}[/]")
+            else:
+                # List all full content files
+                console.print(f"[green]   - {output_path / 'analysis.txt'}[/]")
+                
+                # Full content files
+                full_files = list(output_path.glob('full_*.txt'))
+                for file in sorted(full_files):
+                    console.print(f"[green]   - {file}[/]")
+                
+                # SQL content files
+                sql_files = list(output_path.glob('sql_full_*.txt'))
+                for file in sorted(sql_files):
+                    console.print(f"[green]   - {file}[/]")
+            
+            console.print("[green]4. Press Enter in ChatGPT to submit[/]")
+            return True
                 
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")

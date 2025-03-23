@@ -1,282 +1,266 @@
-# CodeLens - Intelligent Code Analysis Tool
+# 🔍 CodeLens - Supercharge Your LLM Coding Experience
 
-CodeLens is an intelligent code analysis tool designed to generate LLM-friendly context from your codebase. With seamless integration and insightful output, it helps developers analyze their projects effectively.
+CodeLens is your AI coding assistant's best friend - an intelligent code analysis tool that transforms your codebase into LLM-optimized context. Stop wasting tokens on irrelevant files or struggling to explain your project structure. CodeLens does the heavy lifting, so you can focus on building great software.
 
 [![PyPI version](https://badge.fury.io/py/llm-code-lens.svg)](https://badge.fury.io/py/llm-code-lens)
 [![Python Versions](https://img.shields.io/pypi/pyversions/llm-code-lens.svg)](https://pypi.org/project/llm-code-lens/)
 
 ---
 
-## Features
+## 🚀 Why CodeLens?
 
-- **Multi-language support**: Analyzes Python and JavaScript/TypeScript codebases.
-- **LLM-optimized analysis**: Extracts key elements like functions, classes, dependencies, and comments.
-- **Interactive file selection**: Choose which files and directories to include in your analysis.
-- **Token-friendly outputs**: Splits large file contents into token-limited chunks for LLM compatibility.
-- **Seamless CLI**: Easy-to-use command-line interface with multiple options.
-- **TODO tracking**: Highlights TODOs and FIXMEs for better code maintenance.
-- **Pre-commit hook integration**: Automatically runs tests before committing to ensure code quality.
+- **Save time and tokens**: Automatically extract the most relevant code context for your LLM
+- **Get better answers**: Provide AI with structured insights about your codebase architecture
+- **Seamless LLM integration**: One-click sharing with Claude, ChatGPT, Gemini and other LLMs
+- **Work smarter**: Identify core files, entry points, and dependencies automatically
+- **Maintain with ease**: Track TODOs, complexity hotspots, and technical debt
 
 ---
 
-## Installation
+## ✨ Features
 
-To install CodeLens, use pip:
+- **Multi-language analysis**: Deep insights for Python, JavaScript/TypeScript, and SQL codebases
+- **Direct LLM integration**: Send analysis directly to Claude, ChatGPT, or Gemini with one click
+- **Smart code extraction**: Identifies core files, entry points, and critical dependencies
+- **Interactive selection**: Choose exactly which files and directories to analyze
+- **Token optimization**: Splits large files into perfectly-sized chunks for LLM context windows
+- **Complexity metrics**: Highlights complex functions and classes that need attention
+- **Maintenance tracking**: Collects TODOs, FIXMEs, and technical debt indicators
+- **SQL database analysis**: Examines stored procedures, views, and functions
+- **Pre-commit integration**: Automatically runs tests before committing
+
+---
+
+## 📦 Installation
 
 ```bash
 pip install llm-code-lens
 ```
 
+That's it! No complex configuration needed.
+
 ---
 
-## Usage
+## 🎮 Usage
 
-### Basic Usage
+### Quick Start
 Simply run:
 ```bash
 llmcl
 ```
 
-This launches the interactive interface where you can:
-- Navigate and select files/directories to analyze
-- Configure all analysis options
-- Save your settings for future runs
+This launches the interactive interface where you can navigate your project, select files, and configure analysis options with just a few keystrokes.
 
-The tool now always opens in interactive mode for improved usability.
+### Workflow
 
-### Interactive Interface
-CodeLens now features an always-on interactive interface that provides:
-- File/directory navigation and selection
-- Analysis option configuration through easy-to-use menus
-- Persistent settings between runs
-- Visual feedback on selection status
+1. **Select files**: Navigate your project and choose what to analyze
+2. **Configure options**: Set output format, LLM provider, and other settings
+3. **Run analysis**: CodeLens examines your code and generates insights
+4. **Send to LLM**: With one click, send everything to your preferred AI assistant
 
-The interactive interface allows you to:
-- Navigate through your project structure with arrow keys
-- Expand/collapse directories with Right/Left arrows
-- Include or exclude specific files and directories with Space
-- Toggle format, export, and debug options with function keys
-- Save your selection for future runs automatically
+### LLM Integration (New in v0.5.0!)
 
-Key shortcuts in the interactive interface:
-- **Up/Down**: Navigate files and directories
-- **Right**: Expand a directory
-- **Left**: Collapse a directory
-- **Space**: Toggle inclusion/exclusion of the selected item
-- **F1**: Toggle output format (txt/json)
-- **F2**: Toggle full export mode
-- **F3**: Toggle debug mode
-- **Enter**: Confirm selection and start analysis
-- **Q**: Quit without saving
+CodeLens now integrates directly with popular LLM providers:
 
-### Advanced Options
-All options are available directly in the interactive interface:
-
-- **Format**: Toggle between text and JSON output (F1)
-- **Full Export**: Enable/disable full file content export (F2)
-- **Debug**: Enable/disable debug output (F3)
-- **SQL Connection**: Configure SQL server connections
-
-All settings persist between runs, eliminating the need to specify command-line options repeatedly.
-
-For automation scenarios, all command-line options still work:
 ```bash
-llmcl --format json --full --debug
+llmcl --open-in-llm claude
 ```
 
-### Version Checking
-CodeLens now automatically checks for newer versions on PyPI and notifies you when an update is available. This check:
-- Runs silently in the background
-- Only notifies when newer versions exist
-- Provides upgrade instructions
-- Works offline with no errors or delays
+Or select your provider in the interactive menu:
+- **Claude**: Optimized format for Anthropic's Claude
+- **ChatGPT**: Perfect context for OpenAI's models
+- **Gemini**: Formatted for Google's Gemini
+- **None**: Skip browser opening
 
-This feature ensures you always know when new features and improvements are available.
+When analysis completes, CodeLens:
+1. Opens your chosen LLM in your default browser
+2. Copies the complete analysis to your clipboard
+3. Provides a system prompt optimized for code understanding
 
----
+Just paste and start asking questions about your code!
 
-## Configuration
+### Interactive Interface
 
-CodeLens requires no additional configuration. However, you can integrate it with pre-commit hooks for seamless testing workflows.
+The intuitive terminal interface lets you:
+- Navigate with arrow keys (↑↓←→)
+- Toggle selection with Space
+- Switch sections with Tab
+- Configure options with function keys (F1-F5)
+- Confirm with Enter
+- Cancel with Escape or Q
 
-### Setting up Pre-commit Hooks
+All your settings persist between runs, so you can quickly analyze the same files again.
 
-1. Navigate to the `scripts/` directory.
-2. Run the following script to install the pre-commit hook:
-   ```bash
-   python scripts/install-hooks.py
-   ```
-3. The pre-commit hook will automatically run tests using `pytest` before committing.
+### Command Line Options
 
----
+For CI/CD pipelines or scripting:
 
-## Interactive Menu Controls
+```bash
+llmcl --format json --full --open-in-llm claude
+```
 
-The interactive interface provides intuitive controls for navigating your project and configuring analysis options:
-
-- **Up/Down Arrow Keys**: Navigate through files and directories
-- **Right Arrow**: Expand a directory
-- **Left Arrow**: Collapse a directory
-- **Space**: Toggle inclusion/exclusion of the selected item
-- **Tab**: Switch between Files and Options sections
-- **F1-F5**: Toggle or edit various analysis options
-- **Enter**: Confirm selection and start analysis
-- **Q**: Quit without saving
-
-By default, all files are included. Use Space to exclude specific files or directories.
-Your selection and settings are saved between runs, so you don't have to reconfigure everything each time.
-
----
-
-## Output Structure
-
-CodeLens creates a `.codelens` directory containing the following:
-- **`analysis.txt` (or `.json`)**: Complete codebase analysis, including:
-  - Project summary
-  - Key insights
-  - File structure and context
-  - Dependencies
-  - TODOs and comments
-- **Full file content files**: When using the `--full` option, the full content of files is exported in token-limited chunks.
+Full options list:
+- `--output/-o`: Output directory (default: .codelens)
+- `--format/-f`: Output format (txt or json)
+- `--full`: Export complete file contents
+- `--debug`: Enable detailed logging
+- `--sql-server`: SQL Server connection string
+- `--sql-database`: Database to analyze
+- `--open-in-llm`: LLM provider to open results in
 
 ---
 
-## SQL Server Integration
+## 📊 What You Get
 
-CodeLens supports analyzing SQL Server databases including stored procedures, views, and functions.
+CodeLens generates a comprehensive analysis in the `.codelens` directory:
 
-### Prerequisites
+### 1. Project Overview
+- Total files, lines of code, and complexity metrics
+- Language distribution and project structure
+- Entry points and core files identification
 
-1. **ODBC Driver**: Install the Microsoft ODBC Driver for SQL Server:
-   - Windows: Install "ODBC Driver 17 for SQL Server" from Microsoft
-   - Linux: Follow [Microsoft's instructions](https://learn.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server) for your distribution
+### 2. Smart Insights
+- Architectural patterns detected
+- Potential code smells and improvement areas
+- Dependency relationships and import graphs
 
-2. **Database Access**: Ensure you have appropriate permissions to view database objects
+### 3. File-by-File Analysis
+- Function and class inventories with complexity scores
+- Documentation coverage and quality assessment
+- TODOs and technical debt indicators
 
-### Configuration
+### 4. Full Content Export (Optional)
+- Complete file contents split into token-optimized chunks
+- Perfect for providing full context to your LLM
 
-Three ways to configure SQL Server access:
+### 5. SQL Analysis (If Configured)
+- Stored procedures, views, and functions inventory
+- Object dependencies and relationships
+- Parameter analysis and complexity metrics
+
+---
+
+## 🛠️ Configuration
+
+### Pre-commit Integration
+
+Set up pre-commit hooks to ensure quality:
+
+```bash
+python scripts/install-hooks.py
+```
+
+This automatically runs tests before each commit.
+
+### SQL Server Configuration
+
+Three ways to configure SQL analysis:
 
 1. **Environment Variables**:
    ```bash
    export MSSQL_SERVER=your_server
-   export MSSQL_DATABASE=your_database  # Optional
-   export MSSQL_USERNAME=your_username
-   export MSSQL_PASSWORD=your_password
+   export MSSQL_DATABASE=your_database
    ```
 
-2. **Command Line Options**:
+2. **Command Line**:
    ```bash
    llmcl --sql-server "server_name" --sql-database "database_name"
    ```
 
-3. **Configuration File** (recommended for teams):
-   Create a `sql-config.json`:
-   ```json
-   {
-     "server": "server_name",
-     "database": "database_name",
-     "env": {
-       "MSSQL_USERNAME": "username",
-       "MSSQL_PASSWORD": "password"
-     }
-   }
-   ```
-   Then use:
+3. **Configuration File**:
+   Create `sql-config.json` and use:
    ```bash
    llmcl --sql-config sql-config.json
    ```
 
-### Usage Examples
+---
 
-Analyze both files and SQL Server:
-```bash
-llmcl --sql-server "server_name" --sql-database "database_name"
-```
+## 💡 Use Cases
 
-Export full object definitions:
-```bash
-llmcl --sql-server "server_name" --sql-database "database_name" --full
-```
+### For Developers
+- **Onboarding to new projects**: Quickly understand unfamiliar codebases
+- **Refactoring planning**: Identify complex areas that need attention
+- **Technical debt management**: Track TODOs and maintenance needs
+- **Architecture discussions**: Generate insights about code structure
 
-Analyze specific database with JSON output:
-```bash
-llmcl --sql-config sql-config.json --format json
-```
+### For LLM Interactions
+- **Bug fixing**: Provide perfect context for debugging issues
+- **Feature development**: Help LLMs understand where and how to add features
+- **Code reviews**: Get AI assistance with reviewing complex changes
+- **Documentation**: Generate comprehensive docs from code analysis
 
-### Output Structure
-
-SQL analysis includes:
-- Object inventory (procedures, views, functions)
-- Dependencies between objects
-- Complexity metrics
-- TODOs and comments
-- Parameter analysis
-- Full object definitions (with --full flag)
-
-### Security Notes
-
-- Never commit SQL configuration files with credentials
-- Use environment variables or secure secret management
-- Consider using integrated security when possible
-- Ensure minimum required permissions for analysis
+### For Teams
+- **Knowledge sharing**: Create shareable insights about project structure
+- **Consistent context**: Ensure everyone provides similar context to LLMs
+- **Codebase health**: Track metrics over time to measure improvement
+- **SQL analysis**: Understand database objects without direct access
 
 ---
 
-## Requirements
+## 🧩 SQL Server Integration
 
-- Python >= 3.8
+CodeLens provides deep analysis of SQL Server databases:
+
+### Prerequisites
+- Microsoft ODBC Driver for SQL Server
+- Appropriate database permissions
+
+### What You Get
+- Complete inventory of stored procedures, views, and functions
+- Parameter analysis and usage patterns
+- Complexity metrics and dependency mapping
+- Full object definitions with the `--full` flag
+
+### Security Best Practices
+- Use environment variables for credentials
+- Consider integrated security when possible
+- Apply least-privilege principles for analysis
 
 ---
 
-## Development
+## 🔧 Development
 
 ### Setting up the Environment
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/SikamikanikoBG/codelens.git
-   ```
-2. Navigate to the project directory:
-   ```bash
-   cd codelens
-   ```
-3. Create a virtual environment and activate it:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-4. Install dependencies:
-   ```bash
-   pip install -e ".[dev]"
-   ```
+```bash
+git clone https://github.com/SikamikanikoBG/codelens.git
+cd codelens
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e ".[dev]"
+```
 
 ### Running Tests
 
-Run the test suite using:
 ```bash
 pytest
 ```
 
-
 ---
 
-## Contributing
+## 🤝 Contributing
 
 We welcome contributions! To get started:
-1. Fork the repository.
-2. Create a new branch for your feature or fix.
-3. Submit a pull request with a detailed description of your changes.
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Submit a pull request with a clear description
 
 ---
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-## Support
+## 🆘 Support
 
 For issues or feature requests, please visit our [GitHub Issues](https://github.com/SikamikanikoBG/codelens/issues).
+
+---
+
+## 🌟 Star Us on GitHub!
+
+If CodeLens has helped you, please consider giving us a star on GitHub. It helps others discover the tool and supports its continued development.
 

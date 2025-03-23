@@ -426,7 +426,9 @@ I'm sharing a codebase (or summary of a codebase) with you.
 
 Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
 
-Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required.
+IMPORTANT: All your instructions must be provided in a single, unformatted line for each file. Do not use multiple lines, bullet points, or any other formatting. My developer relies on this specific format to process your instructions correctly.
+
+Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required. Do not skip any information - include all details, just format them as a continuous line of text for each file.
 
 In my next message, I'll tell you about a new request or question about this code.
 """

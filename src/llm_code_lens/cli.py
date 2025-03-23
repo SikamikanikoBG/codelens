@@ -418,9 +418,9 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
         try:
             import pyperclip
         except ImportError:
-            console.print("[yellow]pyperclip module not found. Installing it now...[/]")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyperclip"])
-            import pyperclip
+            console.print("[yellow]Error: The pyperclip package is required for LLM integration.[/]")
+            console.print("[yellow]Please install it with: pip install pyperclip[/]")
+            return False
         
         # Define the system prompt
         system_prompt = """You are an experienced developer and software architect. 

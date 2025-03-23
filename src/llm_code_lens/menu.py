@@ -333,7 +333,7 @@ class MenuState:
             'sql_database': self.options['sql_database'],
             'sql_config': self.options['sql_config'],
             'exclude': self.options['exclude_patterns'],
-            'llm_provider': self.options['llm_provider'],
+            'open_in_llm': self.options['llm_provider'],
             'llm_options': self.options['llm_options'],
             'validation': validation_stats if self.options['debug'] else None
         }
@@ -740,17 +740,12 @@ def handle_input(key: int, state: MenuState) -> bool:
             elif option_index == 4:  # SQL Database
                 state.start_editing_option('sql_database')
             elif option_index == 5:  # LLM Provider
-                # Cycle through available LLM providers
-                providers = list(state.options['llm_options']['providers'].keys())
-                current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
-                next_index = (current_index + 1) % len(providers)
-                state.options['llm_provider'] = providers[next_index]
-                state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+                state.toggle_option('llm_provider')
             elif option_index == 6 + len(state.options['exclude_patterns']):  # Add exclude pattern
                 state.start_editing_option('new_exclude')
-            elif option_index >= 5 and option_index < 5 + len(state.options['exclude_patterns']):
-                # Remove exclude pattern
-                pattern_index = option_index - 5
+            elif option_index >= 6 and option_index < 6 + len(state.options['exclude_patterns']):
+                # Remove exclude pattern - adjust index to account for LLM provider
+                pattern_index = option_index - 6
                 state.remove_exclude_pattern(pattern_index)
     
     # Function key controls (work in any section)
@@ -775,8 +770,8 @@ def handle_input(key: int, state: MenuState) -> bool:
         # Open current file in LLM
         state._open_in_llm()
     elif key == curses.KEY_DC:  # Delete key
-        if state.active_section == 'options' and state.option_cursor >= 5 and state.option_cursor < 5 + len(state.options['exclude_patterns']):
-            pattern_index = state.option_cursor - 5
+        if state.active_section == 'options' and state.option_cursor >= 6 and state.option_cursor < 6 + len(state.options['exclude_patterns']):
+            pattern_index = state.option_cursor - 6
             state.remove_exclude_pattern(pattern_index)
     elif key == curses.KEY_IC:  # Insert key
         state.start_editing_option('new_exclude')

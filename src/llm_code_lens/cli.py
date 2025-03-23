@@ -431,89 +431,50 @@ Your instructions should specify exactly what needs to be done in which file and
 In my next message, I'll tell you about a new request or question about this code.
 """
         
+        # Prepare the complete message with files included
+        full_message = system_prompt + "\n\n"
+        
+        # Add the analysis file
+        analysis_file = output_path / 'analysis.txt'
+        if analysis_file.exists():
+            full_message += f"# Code Analysis\n\n```\n{analysis_file.read_text(encoding='utf-8')}\n```\n\n"
+        
+        # Check if full export is enabled by looking for full_*.txt files
+        full_files = list(output_path.glob('full_*.txt'))
+        
+        # If full export is enabled, add the content of all full files
+        if full_files:
+            for file in sorted(full_files):
+                full_message += f"# {file.name}\n\n```\n{file.read_text(encoding='utf-8')}\n```\n\n"
+            
+            # Add SQL content files if they exist
+            sql_files = list(output_path.glob('sql_full_*.txt'))
+            for file in sorted(sql_files):
+                full_message += f"# {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n"
+        
         # Open the appropriate provider
         if provider.lower() == 'claude':
             # Open Claude in a new chat
             webbrowser.open("https://claude.ai/new")
             
-            # Copy the system prompt to clipboard
-            pyperclip.copy(system_prompt)
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
             
-            console.print("[green]Claude opened in browser. Follow these steps:[/]")
-            console.print("[green]1. The system prompt has been copied to your clipboard[/]")
-            console.print("[green]2. Paste it into Claude (Ctrl+V)[/]")
-            
-            # Check if full export is enabled by looking for full_*.txt files
-            full = len(list(output_path.glob('full_*.txt'))) > 0
-            
-            # Wait for user to confirm they've pasted the system prompt
-            console.print("[yellow]Press Enter after you've pasted the system prompt into Claude...[/]", end="")
-            input()
-            
-            # Now help them attach the files
-            console.print("[green]3. Now attach these files to Claude:[/]")
-            
-            if not full:
-                # Just list the analysis file
-                analysis_file = output_path / 'analysis.txt'
-                console.print(f"[green]   - {analysis_file}[/]")
-            else:
-                # List all full content files
-                console.print(f"[green]   - {output_path / 'analysis.txt'}[/]")
-                
-                # Full content files
-                full_files = list(output_path.glob('full_*.txt'))
-                for file in sorted(full_files):
-                    console.print(f"[green]   - {file}[/]")
-                
-                # SQL content files
-                sql_files = list(output_path.glob('sql_full_*.txt'))
-                for file in sorted(sql_files):
-                    console.print(f"[green]   - {file}[/]")
-            
-            console.print("[green]4. Press Enter in Claude to submit[/]")
+            console.print("[green]Claude opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in Claude to paste everything at once![/]")
             return True
                 
         elif provider.lower() == 'chatgpt':
             # Open ChatGPT
             webbrowser.open("https://chat.openai.com/")
             
-            # Copy the system prompt to clipboard
-            pyperclip.copy(system_prompt)
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
             
-            console.print("[green]ChatGPT opened in browser. Follow these steps:[/]")
-            console.print("[green]1. The system prompt has been copied to your clipboard[/]")
-            console.print("[green]2. Paste it into ChatGPT (Ctrl+V)[/]")
-            
-            # Check if full export is enabled
-            full = len(list(output_path.glob('full_*.txt'))) > 0
-            
-            # Wait for user to confirm they've pasted the system prompt
-            console.print("[yellow]Press Enter after you've pasted the system prompt into ChatGPT...[/]", end="")
-            input()
-            
-            # Now help them attach the files
-            console.print("[green]3. Now attach these files to ChatGPT:[/]")
-            
-            if not full:
-                # Just list the analysis file
-                analysis_file = output_path / 'analysis.txt'
-                console.print(f"[green]   - {analysis_file}[/]")
-            else:
-                # List all full content files
-                console.print(f"[green]   - {output_path / 'analysis.txt'}[/]")
-                
-                # Full content files
-                full_files = list(output_path.glob('full_*.txt'))
-                for file in sorted(full_files):
-                    console.print(f"[green]   - {file}[/]")
-                
-                # SQL content files
-                sql_files = list(output_path.glob('sql_full_*.txt'))
-                for file in sorted(sql_files):
-                    console.print(f"[green]   - {file}[/]")
-            
-            console.print("[green]4. Press Enter in ChatGPT to submit[/]")
+            console.print("[green]ChatGPT opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
             return True
                 
         else:

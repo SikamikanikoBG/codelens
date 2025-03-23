@@ -18,6 +18,9 @@ import json
 import shutil
 import webbrowser
 import urllib.parse
+import tempfile
+import platform
+import subprocess
 
 console = Console()
 
@@ -447,19 +450,63 @@ Feel free to ask questions if you need more information about specific parts of 
         
         # Open in the appropriate provider
         if provider.lower() == 'claude':
-            # URL encode the content for Claude
-            encoded_content = urllib.parse.quote(full_content)
-            claude_url = f"https://claude.ai/chat?content={encoded_content}"
+            # Create a temporary HTML file with auto-submit form to Claude
+            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as f:
+                html_content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Redirecting to Claude...</title>
+                    <script>
+                        window.onload = function() {{
+                            // Set the content in the textarea
+                            document.getElementById('content').value = {json.dumps(full_content)};
+                            // Submit the form
+                            document.getElementById('claudeForm').submit();
+                        }};
+                    </script>
+                </head>
+                <body>
+                    <h1>Redirecting to Claude...</h1>
+                    <p>If you are not redirected automatically, click the button below:</p>
+                    <form id="claudeForm" action="https://claude.ai/chat" method="get">
+                        <input type="hidden" name="content" id="content" value="">
+                        <button type="submit">Go to Claude</button>
+                    </form>
+                </body>
+                </html>
+                """
+                f.write(html_content)
+                temp_file_path = f.name
             
-            # Open the URL in the default browser
-            webbrowser.open(claude_url)
+            # Open the HTML file in the default browser
+            webbrowser.open('file://' + temp_file_path)
             return True
+            
         elif provider.lower() == 'chatgpt':
-            # ChatGPT doesn't support direct content passing via URL
-            # Just open the site and let the user paste manually
+            # For ChatGPT, create a temp file with the content for easy copying
+            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.md') as f:
+                f.write(full_content)
+                temp_file_path = f.name
+                
+            # Open ChatGPT in the browser
             webbrowser.open("https://chat.openai.com/")
-            console.print("[yellow]Note: ChatGPT doesn't support direct content passing. Please copy-paste manually.[/]")
+            
+            # Try to open the temp file with the default text editor
+            try:
+                if platform.system() == 'Windows':
+                    os.startfile(temp_file_path)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.call(['open', temp_file_path])
+                else:  # Linux
+                    subprocess.call(['xdg-open', temp_file_path])
+            except Exception as e:
+                console.print(f"[yellow]Note: Could not open content file automatically: {str(e)}[/]")
+                console.print(f"[yellow]Content saved to: {temp_file_path}[/]")
+                
+            console.print("[yellow]Note: ChatGPT doesn't support direct content passing. Please copy-paste from the opened file.[/]")
             return True
+            
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
             return False

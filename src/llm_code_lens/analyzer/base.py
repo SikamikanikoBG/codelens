@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 @dataclass
@@ -250,35 +250,18 @@ class ProjectAnalyzer:
 
     def _is_entry_point(self, file_path: str, analysis: dict) -> bool:
         """Identify if a file is a potential entry point."""
-        filename = Path(file_path).name
-        if filename in ['main.py', 'app.py', 'cli.py', 'server.py', 'index.js', 'server.js']:
-            return True
-
-        # Check for main-like functions
-        for func in analysis.get('functions', []):
-            if func['name'] in ['main', 'run', 'start']:
-                return True
-
-        return False
+        from ..utils import is_potential_entry_point
+        return is_potential_entry_point(file_path, analysis)
 
     def _is_core_file(self, analysis: dict) -> bool:
         """Identify if a file is likely a core component."""
-        if len(analysis.get('functions', [])) > 5:
-            return True
-        if len(analysis.get('classes', [])) > 2:
-            return True
-        if analysis.get('metrics', {}).get('complexity', 0) > 20:
-            return True
-        return False
+        from ..utils import is_core_file
+        return is_core_file(analysis)
 
     def _estimate_todo_priority(self, text: str) -> str:
         """Estimate TODO priority based on content."""
-        text = text.lower()
-        if any(word in text for word in ['urgent', 'critical', 'fixme', 'bug']):
-            return 'high'
-        if any(word in text for word in ['important', 'needed', 'should']):
-            return 'medium'
-        return 'low'
+        from ..utils import estimate_todo_priority
+        return estimate_todo_priority(text)
 
     def _generate_default_insights(self, analysis: dict) -> List[str]:
         """Generate default insights from analysis results."""

@@ -5,6 +5,7 @@ Provides a TUI for selecting files and directories to include/exclude in analysi
 
 import curses
 import os
+import webbrowser
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Set, Optional
 
@@ -23,6 +24,7 @@ class MenuState:
         self.visible_items: List[Tuple[Path, int]] = []  # (path, depth)
         self.max_visible = 0
         self.status_message = ""
+        self.cancelled = False  # Flag to indicate if user cancelled
         
         # CLI options
         self.options = {
@@ -32,7 +34,46 @@ class MenuState:
             'sql_server': '',          # SQL Server connection string
             'sql_database': '',        # SQL Database to analyze
             'sql_config': '',          # Path to SQL configuration file
-            'exclude_patterns': []     # Patterns to exclude
+            'exclude_patterns': [],    # Patterns to exclude
+            'llm_provider': 'claude',  # Default LLM provider
+            'llm_options': {           # LLM provider-specific options
+                'provider': 'claude',  # Current provider
+                'prompt_template': 'code_analysis',  # Current template
+                'providers': {
+                    'claude': {
+                        'api_key': '',
+                        'model': 'claude-3-opus-20240229',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'chatgpt': {
+                        'api_key': '',
+                        'model': 'gpt-4-turbo',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'gemini': {
+                        'api_key': '',
+                        'model': 'gemini-pro',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    },
+                    'local': {
+                        'url': 'http://localhost:8000',
+                        'model': 'llama3',
+                        'temperature': 0.7,
+                        'max_tokens': 4000
+                    }
+                },
+                'available_providers': ['claude', 'chatgpt', 'gemini', 'local', 'none'],
+                'prompt_templates': {
+                    'code_analysis': 'Analyze this code and provide feedback on structure, potential bugs, and improvements:\n\n{code}',
+                    'security_review': 'Review this code for security vulnerabilities and suggest fixes:\n\n{code}',
+                    'documentation': 'Generate documentation for this code:\n\n{code}',
+                    'refactoring': 'Suggest refactoring improvements for this code:\n\n{code}',
+                    'explain': 'Explain how this code works in detail:\n\n{code}'
+                }
+            }
         }
         
         # Apply initial settings if provided
@@ -169,6 +210,12 @@ class MenuState:
         if option_name == 'format':
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
+        elif option_name == 'llm_provider':
+            # Cycle through LLM provider options including 'none'
+            providers = list(self.options['llm_options']['providers'].keys()) + ['none']
+            current_index = providers.index(self.options[option_name]) if self.options[option_name] in providers else 0
+            next_index = (current_index + 1) % len(providers)
+            self.options[option_name] = providers[next_index]
         elif isinstance(self.options[option_name], bool):
             # Toggle boolean options
             self.options[option_name] = not self.options[option_name]
@@ -228,19 +275,50 @@ class MenuState:
     def move_option_cursor(self, direction: int) -> None:
         """Move the cursor in the options section."""
         # Count total options (fixed options + exclude patterns)
-        total_options = 5 + len(self.options['exclude_patterns'])  # 5 fixed options
+        total_options = 6 + len(self.options['exclude_patterns'])  # 6 fixed options + exclude patterns
         
         new_pos = self.option_cursor + direction
         if 0 <= new_pos < total_options:
             self.option_cursor = new_pos
+    
+    def validate_selection(self) -> Dict[str, List[str]]:
+        """Validate the selection and return statistics about selected/excluded items."""
+        stats = {
+            'excluded_count': len(self.excluded_items),
+            'selected_count': len(self.selected_items),
+            'excluded_dirs': [],
+            'excluded_files': []
+        }
+        
+        # Categorize excluded items
+        for path_str in self.excluded_items:
+            path = Path(path_str)
+            if path.is_dir():
+                stats['excluded_dirs'].append(path_str)
+            else:
+                stats['excluded_files'].append(path_str)
+                
+        return stats
     
     def get_results(self) -> Dict[str, Any]:
         """Get the final results of the selection process."""
         include_paths = []
         exclude_paths = [Path(p) for p in self.excluded_items]
         
+        # Validate selection and log statistics if debug is enabled
+        validation_stats = self.validate_selection()
+        if self.options['debug']:
+            status_message = (
+                f"Selection validation: {validation_stats['excluded_count']} items excluded "
+                f"({len(validation_stats['excluded_dirs'])} directories, "
+                f"{len(validation_stats['excluded_files'])} files)"
+            )
+            self.status_message = status_message
+            print(status_message)
+        
         # Save state for future runs
-        self._save_state()
+        if not self.cancelled:
+            self._save_state()
         
         # Return all settings
         return {
@@ -253,7 +331,11 @@ class MenuState:
             'sql_server': self.options['sql_server'],
             'sql_database': self.options['sql_database'],
             'sql_config': self.options['sql_config'],
-            'exclude': self.options['exclude_patterns']
+            'exclude': self.options['exclude_patterns'],
+            'open_in_llm': self.options['llm_provider'],
+            'llm_options': self.options['llm_options'],
+            'validation': validation_stats if self.options['debug'] else None,
+            'cancelled': self.cancelled
         }
         
     def _save_state(self) -> None:
@@ -303,6 +385,36 @@ class MenuState:
         except Exception as e:
             # Log the error instead of silently failing
             self.status_message = f"Error loading menu state: {str(e)}"
+            
+    def _open_in_llm(self) -> bool:
+        """
+        Open selected files in the configured LLM provider.
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Get the provider name
+        provider = self.options['llm_provider']
+        
+        # Handle 'none' option
+        if provider.lower() == 'none':
+            self.status_message = "LLM integration is disabled (set to 'none')"
+            return True
+            
+        # Get the current item
+        current_item = self.get_current_item()
+        if not current_item or not current_item.is_file():
+            self.status_message = "Please select a file to open in LLM"
+            return False
+            
+        # Check if file exists and is readable
+        if not current_item.exists() or not os.access(current_item, os.R_OK):
+            self.status_message = f"Cannot read file: {current_item}"
+            return False
+        
+        # Show a message that this feature is not yet implemented
+        self.status_message = f"Opening in {provider} is not yet implemented"
+        return False
 
 
 def draw_menu(stdscr, state: MenuState) -> None:
@@ -341,19 +453,29 @@ def draw_menu(stdscr, state: MenuState) -> None:
     except curses.error:
         pass
     
-    # Draw section indicator
+    # Draw section indicator with improved visibility
     section_y = 1
     files_section = " [F]iles "
     options_section = " [O]ptions "
+    tab_hint = " [Tab] to switch sections "
+    esc_hint = " [Esc] to cancel "
     
     try:
-        # Files section indicator
+        # Files section indicator with better highlighting
         attr = curses.color_pair(7) if state.active_section == 'files' else curses.color_pair(1)
         stdscr.addstr(section_y, 2, files_section, attr)
         
         # Options section indicator
         attr = curses.color_pair(7) if state.active_section == 'options' else curses.color_pair(1)
         stdscr.addstr(section_y, 2 + len(files_section) + 2, options_section, attr)
+        
+        # Add Tab hint in the middle
+        middle_pos = max_x // 2 - len(tab_hint) // 2
+        stdscr.addstr(section_y, middle_pos, tab_hint, curses.color_pair(6))
+        
+        # Add Escape hint on the right
+        right_pos = max_x - len(esc_hint) - 2
+        stdscr.addstr(section_y, right_pos, esc_hint, curses.color_pair(6))
     except curses.error:
         pass
     
@@ -427,15 +549,13 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Full Export", f"{state.options['full']}", "F2"),
             ("Debug Mode", f"{state.options['debug']}", "F3"),
             ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
-            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5")
+            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5"),
+            ("LLM Provider", f"{state.options['llm_provider']}", "F6")
         ]
         
         # Add exclude patterns
         for i, pattern in enumerate(state.options['exclude_patterns']):
             options.append((f"Exclude Pattern {i+1}", pattern, "Del"))
-        
-        # Option to add new exclude pattern
-        options.append(("Add Exclude Pattern", "", "Ins"))
         
         # Draw each option
         for i, (name, value, key) in enumerate(options):
@@ -467,18 +587,18 @@ def draw_menu(stdscr, state: MenuState) -> None:
     except curses.error:
         pass
     
-    # Draw footer with controls
+    # Draw footer with improved controls
     footer_y = max_y - 2
     
     if state.editing_option:
         # Show editing controls
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
-        # Show file navigation controls
-        controls = " Up/Down: Navigate | Right: Expand | Left: Collapse | Space: Toggle | Tab: Options | Enter: Confirm "
+        # Show file navigation controls with better organization
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
-        controls = " Up/Down: Navigate | Space: Toggle/Edit | Tab: Files | Enter: Confirm "
+        controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
         
     controls = controls.center(max_x-1, "=")
     try:
@@ -534,13 +654,20 @@ def handle_input(key: int, state: MenuState) -> bool:
         return False
     
     # Handle normal navigation mode
-    if key == 9:  # Tab key
+    if key == 27:  # Escape key
+        # Cancel and exit
+        state.cancelled = True
+        state.status_message = "Operation cancelled by user"
+        return True
+    elif key == 9:  # Tab key
         state.toggle_section()
     elif key == 10:  # Enter key
         # Confirm selection and exit
         return True
     elif key == ord('q'):
         # Quit without saving
+        state.cancelled = True
+        state.status_message = "Operation cancelled by user"
         return True
     elif key == ord('f') or key == ord('F'):
         state.active_section = 'files'
@@ -596,11 +723,11 @@ def handle_input(key: int, state: MenuState) -> bool:
                 state.start_editing_option('sql_server')
             elif option_index == 4:  # SQL Database
                 state.start_editing_option('sql_database')
-            elif option_index == 5 + len(state.options['exclude_patterns']):  # Add exclude pattern
-                state.start_editing_option('new_exclude')
-            elif option_index >= 5 and option_index < 5 + len(state.options['exclude_patterns']):
+            elif option_index == 5:  # LLM Provider
+                state.toggle_option('llm_provider')
+            elif option_index >= 6 and option_index < 6 + len(state.options['exclude_patterns']):
                 # Remove exclude pattern
-                pattern_index = option_index - 5
+                pattern_index = option_index - 6
                 state.remove_exclude_pattern(pattern_index)
     
     # Function key controls (work in any section)
@@ -614,12 +741,21 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.start_editing_option('sql_server')
     elif key == curses.KEY_F5:
         state.start_editing_option('sql_database')
+    elif key == curses.KEY_F6:
+        # Cycle through available LLM providers including 'none'
+        providers = list(state.options['llm_options']['providers'].keys()) + ['none']
+        current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
+        next_index = (current_index + 1) % len(providers)
+        state.options['llm_provider'] = providers[next_index]
+        state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+    elif key == curses.KEY_F7:
+        # Open current file in LLM
+        state._open_in_llm()
     elif key == curses.KEY_DC:  # Delete key
-        if state.active_section == 'options' and state.option_cursor >= 5 and state.option_cursor < 5 + len(state.options['exclude_patterns']):
-            pattern_index = state.option_cursor - 5
+        if state.active_section == 'options' and state.option_cursor >= 6 and state.option_cursor < 6 + len(state.options['exclude_patterns']):
+            pattern_index = state.option_cursor - 6
             state.remove_exclude_pattern(pattern_index)
-    elif key == curses.KEY_IC:  # Insert key
-        state.start_editing_option('new_exclude')
+    # Insert key handling removed
         
     return False
 

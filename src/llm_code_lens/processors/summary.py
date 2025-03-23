@@ -1,7 +1,12 @@
 # File: R:\Projects\codelens\src\codelens\processor\summary.py
+"""
+LLM Code Lens - Summary Processor
+Generates project summaries from analysis results.
+"""
 
 from typing import Dict, List
 from pathlib import Path
+from ..utils import estimate_todo_priority, is_potential_entry_point, is_core_file
 
 # src/llm_code_lens/processors/summary.py
 
@@ -158,98 +163,19 @@ def _calculate_final_metrics(summary: dict) -> None:
 
 def _estimate_todo_priority(text: str) -> str:
     """Estimate TODO priority based on content."""
-    text = text.lower()
-    if any(word in text for word in ['urgent', 'critical', 'fixme', 'bug']):
-        return 'high'
-    if any(word in text for word in ['important', 'needed', 'should']):
-        return 'medium'
-    return 'low'
+    return estimate_todo_priority(text)
 
 def _is_potential_entry_point(file_path: str, analysis: dict) -> bool:
     """Identify if a file is a potential entry point."""
-    filename = Path(file_path).name
-    if filename in {'main.py', 'app.py', 'cli.py', 'server.py', 'index.js', 'server.js'}:
-        return True
-    
-    # Check for main-like functions
-    for func in analysis.get('functions', []):
-        if func['name'] in {'main', 'run', 'start', 'cli', 'execute'}:
-            return True
-    
-    return False
+    return is_potential_entry_point(file_path, analysis)
 
 def _is_core_file(analysis: dict) -> bool:
-    """Identify if a file is likely a core component with improved criteria."""
-    # Check function count
-    if len(analysis.get('functions', [])) > 5:
-        return True
-    
-    # Check class count
-    if len(analysis.get('classes', [])) > 2:
-        return True
-    
-    # Check function complexity
-    complex_funcs = sum(1 for f in analysis.get('functions', [])
-                       if (f.get('complexity', 0) > 5 or
-                           f.get('loc', 0) > 50 or
-                           len(f.get('args', [])) > 3))
-    if complex_funcs >= 1:
-        return True
-    
-    # Check file complexity
-    if analysis.get('metrics', {}).get('complexity', 0) > 20:
-        return True
-    
-    return False
+    """Identify if a file is likely a core component."""
+    return is_core_file(analysis)
 
 def generate_insights(analysis: Dict[str, dict]) -> List[str]:
     """Generate insights with improved handling of file analysis."""
-    insights = []
-    total_files = len(analysis)
-    
-    # Basic project stats
-    if total_files == 1:
-        insights.append(f"Found 1 analyzable file")
-    else:
-        insights.append(f"Found {total_files} analyzable files")
-    
-    # Track various metrics
-    total_todos = 0
-    todo_priorities = {'high': 0, 'medium': 0, 'low': 0}
-    undocumented_count = 0
-    complex_functions = []
-    
-    for file_path, file_analysis in analysis.items():
-        # Process TODOs
-        for todo in file_analysis.get('todos', []):
-            total_todos += 1
-            text = todo.get('text', '').lower()
-            if any(word in text for word in ['urgent', 'critical', 'memory leak', 'security']):
-                todo_priorities['high'] += 1
-            elif any(word in text for word in ['important', 'needed']):
-                todo_priorities['medium'] += 1
-            else:
-                todo_priorities['low'] += 1
-        
-        # Process functions
-        for func in file_analysis.get('functions', []):
-            if not func.get('docstring'):
-                undocumented_count += 1
-            if func.get('complexity', 0) > 5 or func.get('loc', 0) > 50:
-                complex_functions.append(f"{func['name']} in {file_path}")
-    
-    # Add insights based on findings
-    if total_todos > 0:
-        insights.append(f"Found {total_todos} TODOs across {len(analysis)} files")
-        if todo_priorities['high'] > 0:
-            insights.append(f"Found {todo_priorities['high']} high-priority TODOs")
-    
-    if complex_functions:
-        insights.append(f"Complex functions detected: {', '.join(complex_functions)}")
-    
-    if undocumented_count > 0:
-        insights.append(f"Found {undocumented_count} undocumented functions")
-    
-    return insights
+    from .insights import generate_insights as gen_insights
+    return gen_insights(analysis)
 
 

@@ -16,6 +16,9 @@ import traceback
 import os
 import json
 import shutil
+import webbrowser
+import subprocess
+import sys
 
 console = Console()
 
@@ -117,6 +120,10 @@ def split_content_by_tokens(content: str, chunk_size: int = 100000) -> List[str]
 
 def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
     """Split content by lines with a maximum chunk size."""
+    # Handle empty content case first
+    if not content:
+        return [""]
+        
     lines = content.splitlines(keepends=True)  # Keep line endings
     chunks = []
     current_chunk = []
@@ -136,7 +143,7 @@ def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
         chunks.append(''.join(current_chunk))
         
     # Handle special case where we got no chunks
-    if not chunks and content:
+    if not chunks:
         return [content]  # Return entire content as one chunk
         
     return chunks
@@ -255,20 +262,15 @@ FUNCTION: [{func['schema']}].[{func['name']}]
             except Exception as e:
                 console.print(f"[yellow]Warning: Error writing {output_file}: {str(e)}[/]")
 
-def _combine_fs_results(combined: dict, result: Union[dict, AnalysisResult]) -> None:
+def _combine_fs_results(combined: dict, result: dict) -> None:
     """Combine file system analysis results."""
-    if isinstance(result, AnalysisResult):
-        result_dict = result.dict()  # Convert AnalysisResult to dict
-    else:
-        result_dict = result  # Already a dict
-
     # Update project stats
-    stats = result_dict.get('summary', {}).get('project_stats', {})
+    stats = result.get('summary', {}).get('project_stats', {})
     combined['summary']['project_stats']['total_files'] += stats.get('total_files', 0)
     combined['summary']['project_stats']['lines_of_code'] += stats.get('lines_of_code', 0)
 
     # Update code metrics
-    metrics = result_dict.get('summary', {}).get('code_metrics', {})
+    metrics = result.get('summary', {}).get('code_metrics', {})
     for metric_type in ['functions', 'classes']:
         if metric_type in metrics:
             for key in ['count', 'with_docs', 'complex']:
@@ -283,21 +285,21 @@ def _combine_fs_results(combined: dict, result: Union[dict, AnalysisResult]) -> 
             combined['summary']['code_metrics']['imports']['unique'].update(unique_imports)
 
     # Update maintenance info
-    maintenance = result_dict.get('summary', {}).get('maintenance', {})
+    maintenance = result.get('summary', {}).get('maintenance', {})
     combined['summary']['maintenance']['todos'].extend(maintenance.get('todos', []))
     
     # Update structure info
-    structure = result_dict.get('summary', {}).get('structure', {})
+    structure = result.get('summary', {}).get('structure', {})
     if 'directories' in structure:
         dirs = structure['directories']
         if isinstance(dirs, (set, list)):
             combined['summary']['structure']['directories'].update(dirs)
 
     # Update insights and files
-    if 'insights' in result_dict:
-        combined['insights'].extend(result_dict['insights'])
-    if 'files' in result_dict:
-        combined['files'].update(result_dict['files'])
+    if 'insights' in result:
+        combined['insights'].extend(result['insights'])
+    if 'files' in result:
+        combined['files'].update(result['files'])
 
 def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResult:
     """Combine multiple analysis results into a single result."""
@@ -333,16 +335,21 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
     }
 
     for result in results:
+        # Handle SQL results
         if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
             _combine_sql_results(combined, result)
-        else:
-            # If result is AnalysisResult, convert to dict using to_json and json.loads
-            if isinstance(result, AnalysisResult):
-                import json
-                result_dict = json.loads(result.to_json())
-            else:
-                result_dict = result
+        # Handle AnalysisResult objects
+        elif isinstance(result, AnalysisResult):
+            # Convert AnalysisResult to a simple dict for easier processing
+            result_dict = {
+                'summary': result.summary,
+                'insights': result.insights,
+                'files': result.files
+            }
             _combine_fs_results(combined, result_dict)
+        # Handle plain dictionaries
+        else:
+            _combine_fs_results(combined, result)
 
     # Calculate final metrics
     total_items = (combined['summary']['project_stats']['total_files'] +
@@ -384,6 +391,117 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
     for view in sql_result.get('views', []):
         key = f"view_{view['name']}"
         combined['files'][key] = view
+    for func in sql_result.get('functions', []):
+        key = f"function_{func['name']}"
+        combined['files'][key] = func
+
+
+def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) -> bool:
+    """
+    Open the analysis results in a browser with the specified LLM provider.
+    
+    Args:
+        provider: The LLM provider to use (claude, chatgpt, gemini, none, etc.)
+        output_path: Path to the output directory containing analysis files
+        debug: Enable debug output
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Handle 'none' option - return success without opening anything
+    if provider and provider.lower() == 'none':
+        console.print("[green]Skipping browser opening as requested.[/]")
+        return True
+        
+    try:
+        # Import pyperclip for clipboard operations
+        try:
+            import pyperclip
+        except ImportError:
+            console.print("[yellow]pyperclip module not found. Installing it now...[/]")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyperclip"])
+            import pyperclip
+        
+        # Define the system prompt
+        system_prompt = """You are an experienced developer and software architect. 
+I'm sharing a codebase (or summary of a codebase) with you.
+
+Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
+
+IMPORTANT: All your instructions must be provided in a single, unformatted line for each file. Do not use multiple lines, bullet points, or any other formatting. My developer relies on this specific format to process your instructions correctly.
+
+Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required. Do not skip any information - include all details, just format them as a continuous line of text for each file.
+
+In my next message, I'll tell you about a new request or question about this code.
+"""
+        
+        # Prepare the complete message with files included
+        full_message = system_prompt + "\n\n"
+        
+        # Add the analysis file
+        analysis_file = output_path / 'analysis.txt'
+        if analysis_file.exists():
+            full_message += f"# Code Analysis\n\n```\n{analysis_file.read_text(encoding='utf-8')}\n```\n\n"
+        
+        # Check if full export is enabled by looking for full_*.txt files
+        full_files = list(output_path.glob('full_*.txt'))
+        
+        # If full export is enabled, add the content of all full files
+        if full_files:
+            for file in sorted(full_files):
+                full_message += f"# {file.name}\n\n```\n{file.read_text(encoding='utf-8')}\n```\n\n"
+            
+            # Add SQL content files if they exist
+            sql_files = list(output_path.glob('sql_full_*.txt'))
+            for file in sorted(sql_files):
+                full_message += f"# {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n"
+        
+        # Open the appropriate provider
+        if provider.lower() == 'claude':
+            # Open Claude in a new chat
+            webbrowser.open("https://claude.ai/new")
+            
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
+            
+            console.print("[green]Claude opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in Claude to paste everything at once![/]")
+            return True
+                
+        elif provider.lower() == 'chatgpt':
+            # Open ChatGPT
+            webbrowser.open("https://chat.openai.com/")
+            
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
+            
+            console.print("[green]ChatGPT opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
+            return True
+            
+        elif provider.lower() == 'gemini':
+            # Open Gemini
+            webbrowser.open("https://gemini.google.com/")
+            
+            # Copy the full message to clipboard
+            pyperclip.copy(full_message)
+            
+            console.print("[green]Gemini opened in browser.[/]")
+            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+            console.print("[green]Just press Ctrl+V in Gemini to paste everything at once![/]")
+            return True
+                
+        else:
+            console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
+            return False
+            
+    except Exception as e:
+        console.print(f"[red]Error opening in LLM: {str(e)}[/]")
+        if debug:
+            console.print(traceback.format_exc())
+        return False
 
 
 
@@ -399,8 +517,10 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
 @click.option('--sql-config', help='Path to SQL configuration file')
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
+@click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt, gemini, none)', default=None)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
-         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, interactive: bool = True):
+         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, 
+         interactive: bool = True, open_in_llm: str = None):
     """
     Main entry point for the CLI.
     
@@ -436,7 +556,8 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             'sql_server': sql_server or '',
             'sql_database': sql_database or '',
             'sql_config': sql_config or '',
-            'exclude_patterns': list(exclude) if exclude else []
+            'exclude_patterns': list(exclude) if exclude else [],
+            'open_in_llm': open_in_llm or ''
         }
         
         # Launch interactive menu (default behavior)
@@ -445,6 +566,11 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             from .menu import run_menu
             console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
             settings = run_menu(Path(path), initial_settings)
+            
+            # Check if user cancelled
+            if settings.get('cancelled', False):
+                console.print("[yellow]Operation cancelled by user[/]")
+                return 0
             
             # Update paths based on user selection
             path = settings.get('path', path)
@@ -459,6 +585,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             sql_database = settings.get('sql_database', sql_database)
             sql_config = settings.get('sql_config', sql_config)
             exclude = settings.get('exclude', exclude)
+            open_in_llm = settings.get('open_in_llm', open_in_llm)
             
             if debug:
                 console.print(f"[blue]Selected path: {path}[/]")
@@ -545,16 +672,23 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         
         # Pass include/exclude paths to analyzer if they were set in interactive mode
         if interactive and (include_paths or exclude_paths):
-            # Modify the analyzer's _collect_files method to respect include/exclude paths
-            original_collect_files = analyzer._collect_files
-            
-            def filtered_collect_files(self, path: Path) -> List[Path]:
-                files = original_collect_files(path)
+            # Create a custom file collection function that respects include/exclude paths
+            def custom_collect_files(path: Path) -> List[Path]:
+                # Get all files that match the analyzer's supported extensions
+                files = []
+                for file_path in path.rglob('*'):
+                    if (file_path.is_file() and 
+                        file_path.suffix.lower() in analyzer.analyzers):
+                        files.append(file_path)
+                
+                # Apply include/exclude filters
                 filtered_files = []
+                excluded_files = []
                 
                 for file_path in files:
                     # Check if file should be included based on interactive selection
                     should_include = True
+                    exclusion_reason = None
                     
                     # If we have explicit include paths, file must be in one of them
                     if include_paths:
@@ -563,20 +697,40 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                             if str(file_path).startswith(str(include_path)):
                                 should_include = True
                                 break
+                        if not should_include:
+                            exclusion_reason = "Not in include paths"
                     
                     # Check if file is in exclude paths
                     for exclude_path in exclude_paths:
                         if str(file_path).startswith(str(exclude_path)):
                             should_include = False
+                            exclusion_reason = f"Excluded by path: {exclude_path}"
                             break
                     
                     if should_include:
                         filtered_files.append(file_path)
+                    else:
+                        excluded_files.append((str(file_path), exclusion_reason))
+                
+                # Log verification information if debug mode is enabled
+                if debug:
+                    console.print(f"[blue]File collection verification:[/]")
+                    console.print(f"[blue]- Total files found: {len(files)}[/]")
+                    console.print(f"[blue]- Files included: {len(filtered_files)}[/]")
+                    console.print(f"[blue]- Files excluded: {len(excluded_files)}[/]")
+                    
+                    # Log a sample of excluded files (up to 5) with reasons
+                    if excluded_files and len(excluded_files) > 0:
+                        console.print("[blue]Sample of excluded files:[/]")
+                        for i, (file, reason) in enumerate(excluded_files[:5]):
+                            console.print(f"[blue]  {i+1}. {file} - {reason}[/]")
+                        if len(excluded_files) > 5:
+                            console.print(f"[blue]  ... and {len(excluded_files) - 5} more[/]")
                 
                 return filtered_files
             
             # Replace the method
-            analyzer._collect_files = filtered_collect_files.__get__(analyzer, ProjectAnalyzer)
+            analyzer._collect_files = custom_collect_files
             
             if debug:
                 console.print(f"[blue]Using custom file collection with filters[/]")
@@ -615,6 +769,14 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 console.print(f"[yellow]Warning during full export: {str(e)}[/]")
                 if debug:
                     console.print(traceback.format_exc())
+
+        # Open in LLM if requested and not 'none'
+        if open_in_llm and open_in_llm.lower() != 'none':
+            console.print(f"[bold blue]🌐 Opening results in {open_in_llm}...[/]")
+            if open_in_llm_provider(open_in_llm, output_path, debug):
+                console.print(f"[bold green]✨ Results opened in {open_in_llm}![/]")
+            else:
+                console.print(f"[yellow]Failed to open results in {open_in_llm}[/]")
 
         # Friendly message to prompt users to give a star
         console.print("\n [bold yellow] ⭐⭐⭐⭐⭐ If you like this tool, please consider giving it a star on GitHub![/]")

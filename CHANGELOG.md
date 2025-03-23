@@ -1,3 +1,29 @@
+## [0.5.0] - 2025-04-15
+
+### Added
+- Added option to open analysis results directly in LLM providers (Claude, ChatGPT, Gemini)
+- Implemented cross-platform browser content sharing for LLM providers
+- Added 'none' option for LLM provider to skip browser opening
+- Enhanced system prompt with formatting instructions for developers
+- Added comprehensive tests for menu, drawing, and CLI filtering modules
+- Added validation and debug logging for file selection and filtering
+
+### Changed
+- Improved menu usability with Escape key, section indicators, and UI cleanup
+- Enhanced LLM provider integration with clipboard and improved user guidance
+- Simplified LLM provider file copying with single clipboard message
+- Consolidated utility functions and removed duplicated code
+
+### Fixed
+- Fixed missing subprocess import in cli.py
+- Corrected option cursor and LLM provider handling in menu navigation
+- Fixed LLM provider option handling and browser opening
+- Fixed undefined `result_dict` reference in `_combine_fs_results`
+- Simplified result combination logic in CLI filtering
+- Fixed test failures in CLI filtering and result combination
+- Added missing curses import in test_menu.py
+- Fixed conftest and import paths for proper test coverage
+
 ## [0.4.1] - 2025-03-17
 
 ### Added

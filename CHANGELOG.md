@@ -1,4 +1,4 @@
-## [0.5.0] - 2025-04-15
+## [0.5.0] - 2025-03-23
 
 ### Added
 - Added option to open analysis results directly in LLM providers (Claude, ChatGPT, Gemini)

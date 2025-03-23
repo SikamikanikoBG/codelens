@@ -744,7 +744,7 @@ def handle_input(key: int, state: MenuState) -> bool:
             elif option_index == 6 + len(state.options['exclude_patterns']):  # Add exclude pattern
                 state.start_editing_option('new_exclude')
             elif option_index >= 6 and option_index < 6 + len(state.options['exclude_patterns']):
-                # Remove exclude pattern - adjust index to account for LLM provider
+                # Remove exclude pattern
                 pattern_index = option_index - 6
                 state.remove_exclude_pattern(pattern_index)
     

@@ -26,6 +26,11 @@ class MenuState:
         self.status_message = ""
         self.cancelled = False  # Flag to indicate if user cancelled
         
+        # Common directories to exclude by default
+        self.common_excludes = ['__pycache__', '.git', '.idea', '.vscode', 'node_modules', 
+                               'venv', 'env', '.pytest_cache', 'build', 'dist', 'egg-info',
+                               '__pycharm__', '.ipynb_checkpoints']
+        
         # CLI options
         self.options = {
             'format': 'txt',           # Output format (txt or json)
@@ -126,6 +131,14 @@ class MenuState:
                 return False
             current = current.parent
             
+        # Check for common directories that should be excluded by default
+        common_excludes = ['__pycache__', '.git', '.idea', '.vscode', 'node_modules', 'venv', 'env', '.pytest_cache']
+        if path.is_dir() and path.name in common_excludes:
+            # Add to excluded items if not already there
+            if path_str not in self.excluded_items:
+                self.excluded_items.add(path_str)
+            return False
+            
         # If not explicitly excluded, it's included by default
         return True
         
@@ -166,6 +179,9 @@ class MenuState:
     
     def rebuild_visible_items(self) -> None:
         """Rebuild the list of visible items based on expanded directories."""
+        # Auto-exclude common directories before building the list
+        self._auto_exclude_common_dirs()
+        
         self.visible_items = []
         self._build_item_list(self.root_path, 0)
         
@@ -178,6 +194,18 @@ class MenuState:
             self.scroll_offset = max(0, self.cursor_pos)
         elif self.cursor_pos >= self.scroll_offset + self.max_visible:
             self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
+    
+    def _auto_exclude_common_dirs(self) -> None:
+        """Automatically exclude common directories that should be ignored."""
+        try:
+            # Find all directories that match common excludes
+            for common_dir in self.common_excludes:
+                for path in self.root_path.rglob(common_dir):
+                    if path.is_dir() and path.name == common_dir:
+                        self.excluded_items.add(str(path))
+        except Exception:
+            # Ignore errors during auto-exclusion
+            pass
     
     def _build_item_list(self, path: Path, depth: int) -> None:
         """Recursively build the list of visible items."""
@@ -192,8 +220,15 @@ class MenuState:
                     items = sorted(path.iterdir(), 
                                   key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                     
+                    # Check for common directories to exclude by default
+                    common_excludes = ['__pycache__', '.git', '.idea', '.vscode', 'node_modules', 'venv', 'env', '.pytest_cache']
                     for item in items:
-                        # Include hidden files/directories (don't skip them)
+                        # Auto-exclude common directories but still show them in the list
+                        if item.is_dir() and item.name in common_excludes:
+                            if str(item) not in self.excluded_items:
+                                self.excluded_items.add(str(item))
+                        
+                        # Include all files/directories in the visible list
                         self._build_item_list(item, depth + 1)
                 except PermissionError:
                     # Handle permission errors gracefully

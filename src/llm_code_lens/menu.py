@@ -26,6 +26,69 @@ class MenuState:
         self.status_message = ""
         self.cancelled = False  # Flag to indicate if user cancelled
         
+        # Common directories to exclude by default
+        self.common_excludes = [
+            # Python
+            '__pycache__', '.pytest_cache', '.coverage', '.tox', '.mypy_cache', '.ruff_cache',
+            'venv', 'env', '.env', '.venv', 'virtualenv', '.virtualenv', 'htmlcov', 'site-packages',
+            'egg-info', '.eggs', 'dist', 'build', 'wheelhouse', '.pytype', 'instance',
+            
+            # JavaScript/TypeScript/React
+            'node_modules', 'bower_components', '.npm', '.yarn', '.pnp', '.next', '.nuxt',
+            '.cache', '.parcel-cache', '.angular', 'coverage', 'storybook-static', '.storybook',
+            'cypress/videos', 'cypress/screenshots', '.docusaurus', 'out', 'dist-*', '.turbo',
+            
+            # Java/Kotlin/Android
+            'target', '.gradle', '.m2', 'build', 'out', '.idea', '.settings', 'bin', 'gen',
+            'classes', 'obj', 'proguard', 'captures', '.externalNativeBuild', '.cxx',
+            
+            # C/C++/C#
+            'Debug', 'Release', 'x64', 'x86', 'bin', 'obj', 'ipch', '.vs', 'packages',
+            'CMakeFiles', 'CMakeCache.txt', 'cmake-build-*', 'vcpkg_installed',
+            
+            # Go
+            'vendor', '.glide', 'Godeps', '_output', 'bazel-*',
+            
+            # Rust
+            'target', 'Cargo.lock', '.cargo',
+            
+            # Swift/iOS
+            'Pods', '.build', 'DerivedData', '.swiftpm', '*.xcworkspace', '*.xcodeproj/xcuserdata',
+            
+            # Docker/Kubernetes
+            '.docker', 'docker-data', 'k8s-data',
+            
+            # Version control
+            '.git', '.hg', '.svn', '.bzr', '_darcs', 'CVS', '.pijul',
+            
+            # IDE/Editor
+            '.vscode', '.idea', '.vs', '.fleet', '.atom', '.eclipse', '.settings', '.project',
+            '.classpath', '.factorypath', '.nbproject', '.sublime-*', '.ensime', '.metals',
+            '.bloop', '.history', '.ionide', '__pycharm__', '.spyproject', '.spyderproject',
+            
+            # Logs and databases
+            'logs', '*.log', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*',
+            '*.sqlite', '*.sqlite3', '*.db', 'db.json',
+            
+            # OS specific
+            '.DS_Store', 'Thumbs.db', 'ehthumbs.db', 'Desktop.ini', '$RECYCLE.BIN',
+            '.directory', '*.swp', '*.swo', '*~',
+            
+            # Documentation
+            'docs/_build', 'docs/site', 'site', 'public', '_site', '.docz', '.docusaurus',
+            
+            # Jupyter
+            '.ipynb_checkpoints', '.jupyter', '.ipython',
+            
+            # Tool specific
+            '.eslintcache', '.stylelintcache', '.sass-cache', '.phpunit.result.cache',
+            '.phpcs-cache', '.php_cs.cache', '.php-cs-fixer.cache', '.sonarqube',
+            '.scannerwork', '.terraform', '.terragrunt-cache', '.serverless',
+            
+            # LLM Code Lens specific
+            '.codelens'
+        ]
+        
         # CLI options
         self.options = {
             'format': 'txt',           # Output format (txt or json)
@@ -126,6 +189,13 @@ class MenuState:
                 return False
             current = current.parent
             
+        # Check for common directories that should be excluded by default
+        if path.is_dir() and path.name in self.common_excludes:
+            # Add to excluded items if not already there
+            if path_str not in self.excluded_items:
+                self.excluded_items.add(path_str)
+            return False
+            
         # If not explicitly excluded, it's included by default
         return True
         
@@ -166,6 +236,9 @@ class MenuState:
     
     def rebuild_visible_items(self) -> None:
         """Rebuild the list of visible items based on expanded directories."""
+        # Auto-exclude common directories before building the list
+        self._auto_exclude_common_dirs()
+        
         self.visible_items = []
         self._build_item_list(self.root_path, 0)
         
@@ -178,6 +251,18 @@ class MenuState:
             self.scroll_offset = max(0, self.cursor_pos)
         elif self.cursor_pos >= self.scroll_offset + self.max_visible:
             self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
+    
+    def _auto_exclude_common_dirs(self) -> None:
+        """Automatically exclude common directories that should be ignored."""
+        try:
+            # Find all directories that match common excludes
+            for common_dir in self.common_excludes:
+                for path in self.root_path.rglob(common_dir):
+                    if path.is_dir() and path.name == common_dir:
+                        self.excluded_items.add(str(path))
+        except Exception:
+            # Ignore errors during auto-exclusion
+            pass
     
     def _build_item_list(self, path: Path, depth: int) -> None:
         """Recursively build the list of visible items."""
@@ -192,8 +277,14 @@ class MenuState:
                     items = sorted(path.iterdir(), 
                                   key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                     
+                    # Use the class's common_excludes list
                     for item in items:
-                        # Include hidden files/directories (don't skip them)
+                        # Auto-exclude common directories but still show them in the list
+                        if item.is_dir() and item.name in self.common_excludes:
+                            if str(item) not in self.excluded_items:
+                                self.excluded_items.add(str(item))
+                        
+                        # Include all files/directories in the visible list
                         self._build_item_list(item, depth + 1)
                 except PermissionError:
                     # Handle permission errors gracefully

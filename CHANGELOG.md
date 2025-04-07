@@ -1,3 +1,10 @@
+## [0.5.2] - 2025-04-07
+
+### Fixed
+- Implemented lazy loading for SQL Server analyzer to prevent crashes when ODBC drivers are missing
+- Improved error handling for SQL-related functionality
+- Added graceful degradation when SQL dependencies are not available
+
 ## [0.5.1] - 2025-03-23
 
 ### Fixed

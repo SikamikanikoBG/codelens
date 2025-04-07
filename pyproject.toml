@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm_code_lens"
-version = "0.5.1"
+version = "0.5.2"
 description = "Intelligent code analysis tool for LLM context generation"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -29,7 +29,7 @@ dependencies = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
-    "pyodbc>=4.0.39",  # For SQL Server connectivity
+    "pyodbc>=4.0.39;platform_system!='Darwin'",  # For SQL Server connectivity (optional)
     "windows-curses;platform_system=='Windows'",  # For TUI on Windows
     "packaging>=22.0.0",  # For version comparison
     "requests>=2.28.0",   # For PyPI version checking

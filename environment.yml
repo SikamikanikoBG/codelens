@@ -6,7 +6,8 @@ dependencies:
   # Base Python and core dependencies
   - python=3.10
   - pip
-  - pyodbc>=4.0.39  # SQL Server connectivity
+  # Optional dependencies
+  - pyodbc>=4.0.39  # SQL Server connectivity (optional - comment out if causing issues)
   
   # Development dependencies
   - black

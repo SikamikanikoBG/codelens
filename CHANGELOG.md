@@ -1,3 +1,14 @@
+## [0.5.3] - 2025-04-07
+
+### Added
+- Expanded directory exclusion list for improved file selection
+- Added comprehensive exclusion patterns for Python, JavaScript, Java, and other languages
+- Added automatic exclusion of the .codelens directory
+
+### Fixed
+- Improved menu selection logic for better handling of excluded directories
+- Fixed issue with common directories being selected by default
+
 ## [0.5.2] - 2025-04-07
 
 ### Fixed

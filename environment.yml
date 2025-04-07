@@ -1,4 +1,5 @@
 name: codelens-dev
+# Version 0.5.3
 channels:
   - conda-forge  # Added conda-forge for pyodbc
   - defaults

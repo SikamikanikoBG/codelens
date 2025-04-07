@@ -71,16 +71,25 @@ class ProjectAnalyzer:
         """Initialize language-specific analyzers."""
         from .python import PythonAnalyzer
         from .javascript import JavaScriptAnalyzer
-        from .sql import SQLServerAnalyzer
+        from . import SQLServerAnalyzer  # Use the proxy instead of direct import
 
-        return {
+        analyzers = {
             '.py': PythonAnalyzer(),
             '.js': JavaScriptAnalyzer(),
             '.jsx': JavaScriptAnalyzer(),
             '.ts': JavaScriptAnalyzer(),
             '.tsx': JavaScriptAnalyzer(),
-            '.sql': SQLServerAnalyzer(),
         }
+        
+        # Try to add SQL analyzer, but don't crash if it fails
+        try:
+            sql_analyzer = SQLServerAnalyzer()
+            analyzers['.sql'] = sql_analyzer
+        except Exception as e:
+            import warnings
+            warnings.warn(f"SQL Server analyzer could not be initialized: {e}")
+        
+        return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
         """Analyze entire project directory."""

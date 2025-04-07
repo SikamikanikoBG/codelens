@@ -635,33 +635,41 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Run SQL analysis if requested
         if sql_server or sql_database or os.getenv('MSSQL_SERVER'):
             console.print("[bold blue]📊 Starting SQL Analysis...[/]")
-            analyzer = SQLServerAnalyzer()
             try:
-                analyzer.connect(sql_server)  # Will use env vars if not provided
-                if sql_database:
-                    console.print(f"[blue]Analyzing database: {sql_database}[/]")
-                    sql_result = analyzer.analyze_database(sql_database)
-                    results.append(sql_result)
-
-                    if full:
-                        console.print("[blue]Exporting SQL content...[/]")
-                        export_sql_content(sql_result, output_path)
-                else:
-                    # Get all databases the user has access to
-                    databases = analyzer.list_databases()
-                    for db in databases:
-                        console.print(f"[blue]Analyzing database: {db}[/]")
-                        sql_result = analyzer.analyze_database(db)
+                from .analyzer import SQLServerAnalyzer
+                analyzer = SQLServerAnalyzer()
+                
+                try:
+                    analyzer.connect(sql_server)  # Will use env vars if not provided
+                    if sql_database:
+                        console.print(f"[blue]Analyzing database: {sql_database}[/]")
+                        sql_result = analyzer.analyze_database(sql_database)
                         results.append(sql_result)
 
                         if full:
-                            console.print(f"[blue]Exporting SQL content for {db}...[/]")
+                            console.print("[blue]Exporting SQL content...[/]")
                             export_sql_content(sql_result, output_path)
+                    else:
+                        # Get all databases the user has access to
+                        databases = analyzer.list_databases()
+                        for db in databases:
+                            console.print(f"[blue]Analyzing database: {db}[/]")
+                            sql_result = analyzer.analyze_database(db)
+                            results.append(sql_result)
 
+                            if full:
+                                console.print(f"[blue]Exporting SQL content for {db}...[/]")
+                                export_sql_content(sql_result, output_path)
+                except Exception as e:
+                    console.print(f"[yellow]Warning during SQL analysis: {str(e)}[/]")
+                    if debug:
+                        console.print(traceback.format_exc())
+                    console.print("[yellow]SQL analysis will be skipped, but file analysis will continue.[/]")
+                    
             except Exception as e:
-                console.print(f"[yellow]Warning during SQL analysis: {str(e)}[/]")
-                if debug:
-                    console.print(traceback.format_exc())
+                console.print(f"[yellow]SQL Server analysis is not available: {str(e)}[/]")
+                console.print("[yellow]Install pyodbc and required ODBC drivers to enable this feature.[/]")
+                console.print("[yellow]Continuing with file analysis only.[/]")
 
         # Check for newer version (non-blocking)
         check_for_newer_version()

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm_code_lens"
-version = "0.5.3"
+version = "0.5.11"
 description = "Intelligent code analysis tool for LLM context generation"
 readme = "README.md"
 requires-python = ">=3.8"

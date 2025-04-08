@@ -4,6 +4,7 @@ CodeLens is your AI coding assistant's best friend - an intelligent code analysi
 
 [![PyPI version](https://badge.fury.io/py/llm-code-lens.svg)](https://badge.fury.io/py/llm-code-lens)
 [![Python Versions](https://img.shields.io/pypi/pyversions/llm-code-lens.svg)](https://pypi.org/project/llm-code-lens/)
+[![Downloads](https://static.pepy.tech/badge/llm-code-lens/month)](https://pepy.tech/project/llm-code-lens)
 
 ---
 
@@ -83,13 +84,18 @@ Just paste and start asking questions about your code!
 
 The intuitive terminal interface lets you:
 - Navigate with arrow keys (↑↓←→)
-- Toggle selection with Space
+- Select files and directories with Space (includes all sub-elements)
 - Switch sections with Tab
-- Configure options with function keys (F1-F5)
+- Configure options with function keys (F1-F6)
 - Confirm with Enter
 - Cancel with Escape or Q
 
 All your settings persist between runs, so you can quickly analyze the same files again.
+
+#### Selection States
+- **[+]** - Included file or directory
+- **[*]** - Explicitly selected file or directory
+- **[-]** - Excluded file or directory
 
 ### Command Line Options
 

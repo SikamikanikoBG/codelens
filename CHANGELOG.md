@@ -1,3 +1,100 @@
+## [0.5.11] - 2025-04-09
+
+### Changed
+- Simplified file selection interface: Space key now always performs full selection with all sub-elements
+- Removed partial selection functionality for more intuitive user experience
+- Updated menu controls and documentation to reflect the simplified selection model
+
+## [0.5.10] - 2025-04-09
+
+### Fixed
+- Fixed critical issues with directory selection logic for more reliable file inclusion/exclusion
+- Improved handling of parent-child relationships in partially selected directories
+- Enhanced recursive selection and exclusion to properly handle all edge cases
+- Fixed inconsistencies in selection state indicators for better user experience
+- Corrected file selection behavior for files within common directories
+
+### Changed
+- Optimized directory traversal for better performance with large repositories
+- Improved error handling during recursive operations to prevent crashes
+- Enhanced visual feedback for selection states with clearer indicators
+
+## [0.5.9] - 2025-04-08
+
+### Added
+- Implemented smarter toggling mechanism with partial selection of directories
+- Added new visual indicator [~] for partially selected directories
+- Implemented Ctrl+Space shortcut for fully selecting directories and all contents
+- Enhanced parent-child relationship tracking for more intuitive selection behavior
+- Added automatic parent directory state updates based on children selection
+
+### Changed
+- Improved directory selection UI with clearer visual indicators
+- Enhanced menu controls with better documentation of selection options
+- Updated state persistence to include partial selection information
+
+## [0.5.8] - 2025-04-08
+
+### Added
+- Implemented partial directory selection with new [~] indicator for more granular control
+- Added Ctrl+Space shortcut for fully selecting directories and all their contents
+- Enhanced directory selection with smarter parent-child relationship tracking
+
+### Fixed
+- Fixed issue with recursive selection of children when including previously excluded directories
+- Improved directory selection logic to properly handle common directories
+- Enhanced recursive inclusion to ensure all children are properly selected
+
+## [0.5.7] - 2025-04-08
+
+### Performance Improvements
+- Introduced performance flags for directory scanning
+- Optimized menu interactions for large repositories
+- Reduced unnecessary filesystem operations
+- Implemented lazy scanning and caching mechanisms
+
+### Added
+- New `scan_complete` and `dirty_scan` flags in menu state management
+- Enhanced directory selection with more efficient tracking
+- Improved recursive inclusion/exclusion logic
+
+### Changed
+- Refactored directory scanning to minimize redundant operations
+- Updated menu state management for better performance
+- Optimized file selection and exclusion processes
+
+### Fixed
+- Resolved performance bottlenecks in large project directory scanning
+- Improved memory efficiency in directory traversal
+- Fixed inconsistent directory selection behavior
+
+## [0.5.5] - 2025-04-08
+
+### Added
+- Implemented recursive directory selection for improved usability
+- Added automatic selection/deselection of all subdirectories and files when toggling a directory
+
+### Changed
+- Improved UI to clearly indicate recursive selection behavior
+- Enhanced status messages to show recursive selection functionality
+- Updated controls description to reflect recursive selection capability
+
+### Fixed
+- Fixed inconsistent selection behavior when toggling directories
+- Improved directory traversal logic for more intuitive selection experience
+
+## [0.5.4] - 2025-04-08
+
+### Added
+- Added ability to toggle exclusion of common directories in the interactive menu
+- Implemented explicit selection of directories that would normally be excluded
+- Added visual indicators for explicitly selected directories
+
+### Fixed
+- Fixed missing path_str conversion in menu rendering logic
+- Improved menu UI with clearer selection indicators
+- Enhanced status messages to show both excluded and explicitly included items
+
 ## [0.5.3] - 2025-04-07
 
 ### Added

@@ -1047,7 +1047,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
-        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection | Ctrl+Space: Full Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Full Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
@@ -1130,12 +1130,7 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.active_section = 'files'
     elif key == ord('o') or key == ord('O'):
         state.active_section = 'options'
-    elif key == 0:  # Ctrl+Space (often represented as 0 in curses)
-        if state.active_section == 'files':
-            current_item = state.get_current_item()
-            if current_item and current_item.is_dir():
-                state.toggle_selection(current_item, fully_select=True)
-                state.status_message = f"Fully selected directory: {current_item.name} and all its contents"
+    # Removed Ctrl+Space shortcut as Space now does full selection
         
     # Files section controls
     if state.active_section == 'files':

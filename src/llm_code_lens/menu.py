@@ -17,7 +17,7 @@ class MenuState:
         self.root_path = root_path.resolve()
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
-        self.selected_items: Set[str] = set()  # Items explicitly selected
+        self.selected_items: Set[str] = set()  # Items explicitly selected (overrides exclusions)
         self.excluded_items: Set[str] = set()  # Items explicitly excluded
         self.cursor_pos = 0
         self.scroll_offset = 0
@@ -170,18 +170,27 @@ class MenuState:
         # If item was excluded, remove from excluded
         if path_str in self.excluded_items:
             self.excluded_items.remove(path_str)
-        # If item was neither excluded nor selected, add to excluded
-        elif path_str not in self.selected_items:
-            self.excluded_items.add(path_str)
-        # If item was selected, remove from selected and add to excluded
-        else:
+            # If this is a common directory, add it to the selected items to override default exclusion
+            if path.is_dir() and path.name in self.common_excludes:
+                self.selected_items.add(path_str)
+        # If item was explicitly selected (for common directories), remove from selected
+        elif path_str in self.selected_items:
             self.selected_items.remove(path_str)
+            # Re-add to excluded items if it's a common directory
+            if path.is_dir() and path.name in self.common_excludes:
+                self.excluded_items.add(path_str)
+        # If item was neither excluded nor selected, add to excluded
+        else:
             self.excluded_items.add(path_str)
             
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
         path_str = str(path)
         
+        # If the item is explicitly selected, it's included regardless of other rules
+        if path_str in self.selected_items:
+            return True
+            
         # Check if this path or any parent is explicitly excluded
         current = path
         while current != self.root_path and current != current.parent:
@@ -378,7 +387,9 @@ class MenuState:
             'excluded_count': len(self.excluded_items),
             'selected_count': len(self.selected_items),
             'excluded_dirs': [],
-            'excluded_files': []
+            'excluded_files': [],
+            'selected_dirs': [],
+            'selected_files': []
         }
         
         # Categorize excluded items
@@ -388,6 +399,14 @@ class MenuState:
                 stats['excluded_dirs'].append(path_str)
             else:
                 stats['excluded_files'].append(path_str)
+                
+        # Categorize selected items
+        for path_str in self.selected_items:
+            path = Path(path_str)
+            if path.is_dir():
+                stats['selected_dirs'].append(path_str)
+            else:
+                stats['selected_files'].append(path_str)
                 
         return stats
     
@@ -402,7 +421,10 @@ class MenuState:
             status_message = (
                 f"Selection validation: {validation_stats['excluded_count']} items excluded "
                 f"({len(validation_stats['excluded_dirs'])} directories, "
-                f"{len(validation_stats['excluded_files'])} files)"
+                f"{len(validation_stats['excluded_files'])} files), "
+                f"{validation_stats['selected_count']} items explicitly included "
+                f"({len(validation_stats['selected_dirs'])} directories, "
+                f"{len(validation_stats['selected_files'])} files)"
             )
             self.status_message = status_message
             print(status_message)
@@ -440,6 +462,7 @@ class MenuState:
             state = {
                 'expanded_dirs': list(self.expanded_dirs),
                 'excluded_items': list(self.excluded_items),
+                'selected_items': list(self.selected_items),
                 'options': self.options
             }
             
@@ -462,6 +485,7 @@ class MenuState:
                 # Restore state
                 self.expanded_dirs = set(state.get('expanded_dirs', []))
                 self.excluded_items = set(state.get('excluded_items', []))
+                self.selected_items = set(state.get('selected_items', []))
                 
                 # Restore options if available
                 if 'options' in state:
@@ -589,8 +613,10 @@ def draw_menu(stdscr, state: MenuState) -> None:
             prefix = "+ " if is_dir and str(path) in state.expanded_dirs else \
                      "- " if is_dir else "  "
             
-            # Determine selection indicator based on exclusion status
-            if is_excluded:
+            # Determine selection indicator based on exclusion/selection status
+            if path_str in state.selected_items:
+                sel_indicator = "[*]"  # Explicitly selected
+            elif is_excluded:
                 sel_indicator = "[-]"  # Excluded
             else:
                 sel_indicator = "[+]"  # Included
@@ -604,6 +630,8 @@ def draw_menu(stdscr, state: MenuState) -> None:
             # Determine color
             if state.active_section == 'files' and idx == state.cursor_pos:
                 attr = curses.color_pair(2)  # Highlighted
+            elif path_str in state.selected_items:
+                attr = curses.color_pair(3) | curses.A_BOLD  # Explicitly selected (bold)
             elif is_excluded:
                 attr = curses.color_pair(4)  # Excluded
             elif not is_excluded:
@@ -686,7 +714,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
-        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "

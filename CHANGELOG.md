@@ -1,3 +1,18 @@
+## [0.5.6] - 2025-04-08
+
+### Added
+- Optimized menu performance for large repositories
+
+### Changed
+- Improved directory exclusion logic to only scan once at initialization
+- Enhanced recursive selection to work with existing data structures
+- Reduced filesystem operations for better performance
+
+### Fixed
+- Fixed performance issues with constant rescanning of directories
+- Improved responsiveness in large repositories
+- Optimized memory usage for directory selection
+
 ## [0.5.5] - 2025-04-08
 
 ### Added

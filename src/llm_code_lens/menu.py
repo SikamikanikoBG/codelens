@@ -1047,7 +1047,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
-        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Full Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
@@ -1157,7 +1157,7 @@ def handle_input(key: int, state: MenuState) -> bool:
                         break
             state.rebuild_visible_items()
         elif key == ord(' ') and current_item:
-            # Full select (instead of toggle)
+            # Full select with all sub-elements
             state.toggle_selection(current_item, fully_select=True)
     
     # Options section controls

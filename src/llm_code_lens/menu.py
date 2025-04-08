@@ -742,10 +742,15 @@ def draw_menu(stdscr, state: MenuState) -> None:
         if not status.strip():
             if state.active_section == 'files':
                 excluded_count = len(state.excluded_items)
-                if excluded_count > 0:
-                    status = f" {excluded_count} items excluded | Space: Toggle exclusion | Enter: Confirm "
+                selected_count = len(state.selected_items)
+                if excluded_count > 0 and selected_count > 0:
+                    status = f" {excluded_count} items excluded, {selected_count} explicitly included | Space: Toggle selection | Enter: Confirm "
+                elif excluded_count > 0:
+                    status = f" {excluded_count} items excluded | Space: Toggle selection | Enter: Confirm "
+                elif selected_count > 0:
+                    status = f" {selected_count} items explicitly included | Space: Toggle selection | Enter: Confirm "
                 else:
-                    status = " All files included by default | Space: Toggle exclusion | Enter: Confirm "
+                    status = " All files included by default | Space: Toggle selection | Enter: Confirm "
             else:
                 status = " Use Space to toggle options or edit text fields | Enter: Confirm "
                 

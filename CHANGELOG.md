@@ -1,3 +1,18 @@
+## [0.5.5] - 2025-04-08
+
+### Added
+- Implemented recursive directory selection for improved usability
+- Added automatic selection/deselection of all subdirectories and files when toggling a directory
+
+### Changed
+- Improved UI to clearly indicate recursive selection behavior
+- Enhanced status messages to show recursive selection functionality
+- Updated controls description to reflect recursive selection capability
+
+### Fixed
+- Fixed inconsistent selection behavior when toggling directories
+- Improved directory traversal logic for more intuitive selection experience
+
 ## [0.5.4] - 2025-04-08
 
 ### Added

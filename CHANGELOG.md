@@ -1,3 +1,10 @@
+## [0.5.11] - 2025-04-09
+
+### Changed
+- Simplified file selection interface: Space key now always performs full selection with all sub-elements
+- Removed partial selection functionality for more intuitive user experience
+- Updated menu controls and documentation to reflect the simplified selection model
+
 ## [0.5.10] - 2025-04-09
 
 ### Fixed

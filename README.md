@@ -84,8 +84,7 @@ Just paste and start asking questions about your code!
 
 The intuitive terminal interface lets you:
 - Navigate with arrow keys (↑↓←→)
-- Toggle selection with Space
-- Fully select directories with Ctrl+Space
+- Select files and directories with Space (includes all sub-elements)
 - Switch sections with Tab
 - Configure options with function keys (F1-F6)
 - Confirm with Enter
@@ -96,7 +95,6 @@ All your settings persist between runs, so you can quickly analyze the same file
 #### Selection States
 - **[+]** - Included file or directory
 - **[*]** - Explicitly selected file or directory
-- **[~]** - Partially selected directory (some children selected)
 - **[-]** - Excluded file or directory
 
 ### Command Line Options

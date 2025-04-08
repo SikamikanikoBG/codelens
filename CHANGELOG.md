@@ -1,3 +1,17 @@
+## [0.5.9] - 2025-04-08
+
+### Added
+- Implemented smarter toggling mechanism with partial selection of directories
+- Added new visual indicator [~] for partially selected directories
+- Implemented Ctrl+Space shortcut for fully selecting directories and all contents
+- Enhanced parent-child relationship tracking for more intuitive selection behavior
+- Added automatic parent directory state updates based on children selection
+
+### Changed
+- Improved directory selection UI with clearer visual indicators
+- Enhanced menu controls with better documentation of selection options
+- Updated state persistence to include partial selection information
+
 ## [0.5.8] - 2025-04-08
 
 ### Added

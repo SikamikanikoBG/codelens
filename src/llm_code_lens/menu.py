@@ -614,6 +614,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
                      "- " if is_dir else "  "
             
             # Determine selection indicator based on exclusion/selection status
+            path_str = str(path)
             if path_str in state.selected_items:
                 sel_indicator = "[*]"  # Explicitly selected
             elif is_excluded:
@@ -628,6 +629,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
                 item_str = item_str[:max_x - 5] + "..."
                 
             # Determine color
+            path_str = str(path)
             if state.active_section == 'files' and idx == state.cursor_pos:
                 attr = curses.color_pair(2)  # Highlighted
             elif path_str in state.selected_items:

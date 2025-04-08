@@ -1,3 +1,10 @@
+## [0.5.8] - 2025-04-08
+
+### Fixed
+- Fixed issue with recursive selection of children when including previously excluded directories
+- Improved directory selection logic to properly handle common directories
+- Enhanced recursive inclusion to ensure all children are properly selected
+
 ## [0.5.7] - 2025-04-08
 
 ### Performance Improvements

@@ -18,6 +18,7 @@ class MenuState:
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
         self.selected_items: Set[str] = set()  # Items explicitly selected (overrides exclusions)
+        self.partially_selected_items: Set[str] = set()  # Items partially selected
         self.excluded_items: Set[str] = set()  # Items explicitly excluded
         self.cursor_pos = 0
         self.scroll_offset = 0
@@ -168,27 +169,38 @@ class MenuState:
             self.expanded_dirs.add(path_str)
         self.rebuild_visible_items()
             
-    def toggle_selection(self, path: Path) -> None:
-        """Toggle selection status of an item."""
+    def toggle_selection(self, path: Path, fully_select: bool = False) -> None:
+        """
+        Toggle selection status of an item.
+        
+        Args:
+            path: The path to toggle
+            fully_select: If True, fully select the directory and all children
+        """
         path_str = str(path)
         
         # Determine the current state
         is_excluded = path_str in self.excluded_items
         is_selected = path_str in self.selected_items
+        is_partially_selected = path_str in self.partially_selected_items
         
         # If it's a directory, we'll need to handle all children
         if path.is_dir():
-            # If item was excluded, remove from excluded (include it)
+            # If item was excluded, move to partially selected state
             if is_excluded:
                 # Remove this directory from excluded
                 self.excluded_items.discard(path_str)
                 
-                # If this is a common directory, add it to selected items to override default exclusion
+                # If this is a common directory, add it to partially selected items by default
+                # or to selected items if fully_select is True
                 if path.name in self.common_excludes:
-                    self.selected_items.add(path_str)
-                
-                # Recursively include all children
-                self._recursively_include(path)
+                    if fully_select:
+                        self.selected_items.add(path_str)
+                        # Recursively include all children
+                        self._recursively_include(path)
+                    else:
+                        self.partially_selected_items.add(path_str)
+                        # Don't recursively include children for partial selection
                 
                 # Mark directory structure as dirty to force rescan
                 self.dirty_scan = True
@@ -201,21 +213,47 @@ class MenuState:
                 # Re-add to excluded items if it's a common directory
                 if path.name in self.common_excludes:
                     self.excluded_items.add(path_str)
+                else:
+                    # For non-common directories, move to excluded
+                    self.excluded_items.add(path_str)
                 
-                # Recursively exclude all children of common directories
-                if path.name in self.common_excludes:
+                # Recursively exclude all children
+                self._recursively_exclude(path)
+                
+                # Mark directory structure as dirty to force rescan
+                self.dirty_scan = True
+                
+            # If item was partially selected, move to fully selected or excluded
+            elif is_partially_selected:
+                # Remove from partially selected
+                self.partially_selected_items.discard(path_str)
+                
+                if fully_select:
+                    # Move to fully selected
+                    self.selected_items.add(path_str)
+                    # Recursively include all children
+                    self._recursively_include(path)
+                else:
+                    # Move to excluded
+                    self.excluded_items.add(path_str)
+                    # Recursively exclude all children
                     self._recursively_exclude(path)
                 
                 # Mark directory structure as dirty to force rescan
                 self.dirty_scan = True
                 
-            # If item was neither excluded nor selected, add to excluded
+            # If item was neither excluded, selected, nor partially selected
             else:
-                # Add to excluded
-                self.excluded_items.add(path_str)
-                
-                # Recursively exclude all children
-                self._recursively_exclude(path)
+                if fully_select:
+                    # Add to selected
+                    self.selected_items.add(path_str)
+                    # Recursively include all children
+                    self._recursively_include(path)
+                else:
+                    # Add to excluded
+                    self.excluded_items.add(path_str)
+                    # Recursively exclude all children
+                    self._recursively_exclude(path)
                 
                 # Mark directory structure as dirty to force rescan
                 self.dirty_scan = True
@@ -227,6 +265,9 @@ class MenuState:
                 self.selected_items.discard(path_str)
             else:
                 self.excluded_items.add(path_str)
+            
+            # Update parent directory's selection state
+            self._update_parent_selection_state(path.parent)
             
             # Mark directory structure as dirty to force rescan
             self.dirty_scan = True
@@ -249,12 +290,98 @@ class MenuState:
         # Check for common directories that should be excluded by default
         if path.is_dir() and path.name in self.common_excludes:
             # Add to excluded items if not already there
-            if path_str not in self.excluded_items:
+            if path_str not in self.excluded_items and path_str not in self.partially_selected_items and path_str not in self.selected_items:
                 self.excluded_items.add(path_str)
             return False
             
         # If not explicitly excluded, it's included by default
         return True
+        
+    def is_partially_selected(self, path: Path) -> bool:
+        """Check if a path is partially selected."""
+        path_str = str(path)
+        
+        # If the item is explicitly partially selected
+        if path_str in self.partially_selected_items:
+            return True
+            
+        # Check if any parent is partially selected (and this item is not excluded)
+        if not self.is_excluded(path):
+            current = path.parent
+            while current != self.root_path and current != current.parent:
+                if str(current) in self.partially_selected_items:
+                    return True
+                current = current.parent
+                
+        return False
+        
+    def _update_parent_selection_state(self, directory: Path) -> None:
+        """Update the selection state of a parent directory based on its children."""
+        if not directory.exists() or directory == self.root_path.parent:
+            return
+            
+        dir_str = str(directory)
+        
+        # Skip if the directory is explicitly excluded
+        if dir_str in self.excluded_items:
+            return
+            
+        # Check all children
+        all_children_selected = True
+        any_children_selected = False
+        any_children_excluded = False
+        
+        try:
+            for child in directory.iterdir():
+                child_str = str(child)
+                
+                if child_str in self.selected_items:
+                    any_children_selected = True
+                elif child_str in self.excluded_items:
+                    all_children_selected = False
+                    any_children_excluded = True
+                elif child_str in self.partially_selected_items:
+                    all_children_selected = False
+                    any_children_selected = True
+                else:
+                    # If child is neither selected nor excluded, check if it's a directory
+                    if child.is_dir():
+                        # For directories, we need to check their children
+                        if child.name in self.common_excludes and child_str not in self.partially_selected_items:
+                            # Common directories are excluded by default
+                            all_children_selected = False
+                        else:
+                            # For other directories, we can't determine without checking their children
+                            all_children_selected = False
+                    else:
+                        # Files that are neither selected nor excluded are considered not selected
+                        all_children_selected = False
+        except (PermissionError, OSError):
+            # If we can't access the directory, assume not all are selected
+            all_children_selected = False
+            
+        # Update the directory's state
+        if all_children_selected and any_children_selected:
+            # All children are selected, so the directory should be fully selected
+            if dir_str in self.partially_selected_items:
+                self.partially_selected_items.remove(dir_str)
+            if dir_str not in self.selected_items:
+                self.selected_items.add(dir_str)
+        elif any_children_selected:
+            # Some children are selected, so the directory should be partially selected
+            if dir_str in self.selected_items:
+                self.selected_items.remove(dir_str)
+            if dir_str not in self.partially_selected_items:
+                self.partially_selected_items.add(dir_str)
+        else:
+            # No children are selected, so the directory should be neither
+            if dir_str in self.selected_items:
+                self.selected_items.remove(dir_str)
+            if dir_str in self.partially_selected_items:
+                self.partially_selected_items.remove(dir_str)
+            
+        # Recursively update parent directories
+        self._update_parent_selection_state(directory.parent)
         
     def is_excluded(self, path: Path) -> bool:
         """Check if a path is excluded."""
@@ -496,10 +623,12 @@ class MenuState:
         stats = {
             'excluded_count': len(self.excluded_items),
             'selected_count': len(self.selected_items),
+            'partially_selected_count': len(self.partially_selected_items),
             'excluded_dirs': [],
             'excluded_files': [],
             'selected_dirs': [],
-            'selected_files': []
+            'selected_files': [],
+            'partially_selected_dirs': []
         }
         
         # Categorize excluded items
@@ -517,6 +646,12 @@ class MenuState:
                 stats['selected_dirs'].append(path_str)
             else:
                 stats['selected_files'].append(path_str)
+                
+        # Categorize partially selected items
+        for path_str in self.partially_selected_items:
+            path = Path(path_str)
+            if path.is_dir():
+                stats['partially_selected_dirs'].append(path_str)
                 
         return stats
     
@@ -573,6 +708,7 @@ class MenuState:
                 'expanded_dirs': list(self.expanded_dirs),
                 'excluded_items': list(self.excluded_items),
                 'selected_items': list(self.selected_items),
+                'partially_selected_items': list(self.partially_selected_items),
                 'options': self.options
             }
             
@@ -596,6 +732,7 @@ class MenuState:
                 self.expanded_dirs = set(state.get('expanded_dirs', []))
                 self.excluded_items = set(state.get('excluded_items', []))
                 self.selected_items = set(state.get('selected_items', []))
+                self.partially_selected_items = set(state.get('partially_selected_items', []))
                 
                 # Restore options if available
                 if 'options' in state:
@@ -605,8 +742,9 @@ class MenuState:
                 
                 # Set status message to indicate loaded state
                 excluded_count = len(self.excluded_items)
-                if excluded_count > 0:
-                    self.status_message = f"Loaded {excluded_count} excluded items from saved state"
+                partially_selected_count = len(self.partially_selected_items)
+                if excluded_count > 0 or partially_selected_count > 0:
+                    self.status_message = f"Loaded {excluded_count} excluded items and {partially_selected_count} partially selected items from saved state"
         except Exception as e:
             # Log the error instead of silently failing
             self.status_message = f"Error loading menu state: {str(e)}"
@@ -727,6 +865,8 @@ def draw_menu(stdscr, state: MenuState) -> None:
             path_str = str(path)
             if path_str in state.selected_items:
                 sel_indicator = "[*]"  # Explicitly selected
+            elif path_str in state.partially_selected_items:
+                sel_indicator = "[~]"  # Partially selected
             elif is_excluded:
                 sel_indicator = "[-]"  # Excluded
             else:
@@ -826,7 +966,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
-        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection (Recursive) | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection | Ctrl+Space: Full Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
@@ -909,6 +1049,12 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.active_section = 'files'
     elif key == ord('o') or key == ord('O'):
         state.active_section = 'options'
+    elif key == 0:  # Ctrl+Space (often represented as 0 in curses)
+        if state.active_section == 'files':
+            current_item = state.get_current_item()
+            if current_item and current_item.is_dir():
+                state.toggle_selection(current_item, fully_select=True)
+                state.status_message = f"Fully selected directory: {current_item.name} and all its contents"
         
     # Files section controls
     if state.active_section == 'files':

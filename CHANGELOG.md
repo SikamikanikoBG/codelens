@@ -1,5 +1,10 @@
 ## [0.5.8] - 2025-04-08
 
+### Added
+- Implemented partial directory selection with new [~] indicator for more granular control
+- Added Ctrl+Space shortcut for fully selecting directories and all their contents
+- Enhanced directory selection with smarter parent-child relationship tracking
+
 ### Fixed
 - Fixed issue with recursive selection of children when including previously excluded directories
 - Improved directory selection logic to properly handle common directories

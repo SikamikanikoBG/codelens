@@ -349,9 +349,15 @@ class MenuState:
                 if item_str in self.excluded_items:
                     self.excluded_items.remove(item_str)
                 
-                # If it's a common directory, add to selected items
+                # If it's a common directory, add to selected items to override default exclusion
                 if item.is_dir() and item.name in self.common_excludes:
                     self.selected_items.add(item_str)
+                    
+                    # Also remove all children of this common directory from excluded_items
+                    for child in item.rglob('*'):
+                        child_str = str(child)
+                        if child_str in self.excluded_items:
+                            self.excluded_items.remove(child_str)
                 
                 # Mark directory structure as dirty to force rescan
                 self.dirty_scan = True

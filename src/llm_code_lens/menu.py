@@ -167,21 +167,52 @@ class MenuState:
         """Toggle selection status of an item."""
         path_str = str(path)
         
-        # If item was excluded, remove from excluded
-        if path_str in self.excluded_items:
-            self.excluded_items.remove(path_str)
-            # If this is a common directory, add it to the selected items to override default exclusion
-            if path.is_dir() and path.name in self.common_excludes:
-                self.selected_items.add(path_str)
-        # If item was explicitly selected (for common directories), remove from selected
-        elif path_str in self.selected_items:
-            self.selected_items.remove(path_str)
-            # Re-add to excluded items if it's a common directory
-            if path.is_dir() and path.name in self.common_excludes:
+        # Determine the current state
+        is_excluded = path_str in self.excluded_items
+        is_selected = path_str in self.selected_items
+        
+        # If it's a directory, we'll need to handle all children
+        if path.is_dir():
+            # If item was excluded, remove from excluded (include it)
+            if is_excluded:
+                # Remove this directory from excluded
+                self.excluded_items.remove(path_str)
+                
+                # If this is a common directory, add it to selected items to override default exclusion
+                if path.name in self.common_excludes:
+                    self.selected_items.add(path_str)
+                
+                # Recursively include all children
+                self._recursively_include(path)
+                
+            # If item was explicitly selected, remove from selected (exclude it)
+            elif is_selected:
+                # Remove from selected
+                self.selected_items.remove(path_str)
+                
+                # Re-add to excluded items if it's a common directory
+                if path.name in self.common_excludes:
+                    self.excluded_items.add(path_str)
+                
+                # Recursively exclude all children of common directories
+                if path.name in self.common_excludes:
+                    self._recursively_exclude(path)
+                
+            # If item was neither excluded nor selected, add to excluded
+            else:
+                # Add to excluded
                 self.excluded_items.add(path_str)
-        # If item was neither excluded nor selected, add to excluded
+                
+                # Recursively exclude all children
+                self._recursively_exclude(path)
         else:
-            self.excluded_items.add(path_str)
+            # For files, just toggle the individual file
+            if is_excluded:
+                self.excluded_items.remove(path_str)
+            elif is_selected:
+                self.selected_items.remove(path_str)
+            else:
+                self.excluded_items.add(path_str)
             
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
@@ -271,6 +302,42 @@ class MenuState:
                         self.excluded_items.add(str(path))
         except Exception:
             # Ignore errors during auto-exclusion
+            pass
+            
+    def _recursively_include(self, directory: Path) -> None:
+        """Recursively include all files and subdirectories."""
+        try:
+            # Process all children
+            for item in directory.rglob('*'):
+                item_str = str(item)
+                
+                # Remove from excluded items
+                if item_str in self.excluded_items:
+                    self.excluded_items.remove(item_str)
+                
+                # If it's a common directory, add to selected items
+                if item.is_dir() and item.name in self.common_excludes:
+                    self.selected_items.add(item_str)
+        except Exception:
+            # Ignore errors during recursive inclusion
+            pass
+    
+    def _recursively_exclude(self, directory: Path) -> None:
+        """Recursively exclude all files and subdirectories."""
+        try:
+            # Process all children
+            for item in directory.rglob('*'):
+                item_str = str(item)
+                
+                # Add to excluded items
+                if item_str not in self.excluded_items:
+                    self.excluded_items.add(item_str)
+                
+                # Remove from selected items if present
+                if item_str in self.selected_items:
+                    self.selected_items.remove(item_str)
+        except Exception:
+            # Ignore errors during recursive exclusion
             pass
     
     def _build_item_list(self, path: Path, depth: int) -> None:
@@ -716,7 +783,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         controls = " Enter: Confirm | Esc: Cancel "
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
-        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Toggle Selection (Recursive) | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
@@ -746,13 +813,13 @@ def draw_menu(stdscr, state: MenuState) -> None:
                 excluded_count = len(state.excluded_items)
                 selected_count = len(state.selected_items)
                 if excluded_count > 0 and selected_count > 0:
-                    status = f" {excluded_count} items excluded, {selected_count} explicitly included | Space: Toggle selection | Enter: Confirm "
+                    status = f" {excluded_count} items excluded, {selected_count} explicitly included | Space: Toggle selection (recursive for directories) | Enter: Confirm "
                 elif excluded_count > 0:
-                    status = f" {excluded_count} items excluded | Space: Toggle selection | Enter: Confirm "
+                    status = f" {excluded_count} items excluded | Space: Toggle selection (recursive for directories) | Enter: Confirm "
                 elif selected_count > 0:
-                    status = f" {selected_count} items explicitly included | Space: Toggle selection | Enter: Confirm "
+                    status = f" {selected_count} items explicitly included | Space: Toggle selection (recursive for directories) | Enter: Confirm "
                 else:
-                    status = " All files included by default | Space: Toggle selection | Enter: Confirm "
+                    status = " All files included by default | Space: Toggle selection (recursive for directories) | Enter: Confirm "
             else:
                 status = " Use Space to toggle options or edit text fields | Enter: Confirm "
                 

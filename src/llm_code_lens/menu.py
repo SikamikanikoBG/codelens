@@ -1157,8 +1157,8 @@ def handle_input(key: int, state: MenuState) -> bool:
                         break
             state.rebuild_visible_items()
         elif key == ord(' ') and current_item:
-            # Toggle selection
-            state.toggle_selection(current_item)
+            # Full select (instead of toggle)
+            state.toggle_selection(current_item, fully_select=True)
     
     # Options section controls
     elif state.active_section == 'options':

@@ -1,17 +1,25 @@
 ## [0.5.7] - 2025-04-08
 
+### Performance Improvements
+- Introduced performance flags for directory scanning
+- Optimized menu interactions for large repositories
+- Reduced unnecessary filesystem operations
+- Implemented lazy scanning and caching mechanisms
+
 ### Added
-- Optimized menu performance for large repositories
+- New `scan_complete` and `dirty_scan` flags in menu state management
+- Enhanced directory selection with more efficient tracking
+- Improved recursive inclusion/exclusion logic
 
 ### Changed
-- Improved directory exclusion logic to only scan once at initialization
-- Enhanced recursive selection to work with existing data structures
-- Reduced filesystem operations for better performance
+- Refactored directory scanning to minimize redundant operations
+- Updated menu state management for better performance
+- Optimized file selection and exclusion processes
 
 ### Fixed
-- Fixed performance issues with constant rescanning of directories
-- Improved responsiveness in large repositories
-- Optimized memory usage for directory selection
+- Resolved performance bottlenecks in large project directory scanning
+- Improved memory efficiency in directory traversal
+- Fixed inconsistent directory selection behavior
 
 ## [0.5.5] - 2025-04-08
 

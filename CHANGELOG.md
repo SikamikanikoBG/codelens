@@ -1,4 +1,4 @@
-## [0.5.6] - 2025-04-08
+## [0.5.7] - 2025-04-08
 
 ### Added
 - Optimized menu performance for large repositories

@@ -26,6 +26,11 @@ class MenuState:
         self.status_message = ""
         self.cancelled = False  # Flag to indicate if user cancelled
         
+        # New flags for scanning optimization
+        self.scan_complete = False
+        self.dirty_scan = True  # Indicates directory structure needs rescanning
+        self.auto_exclude_complete = False  # Flag to prevent repeated auto-exclusion scans
+        
         # Common directories to exclude by default
         self.common_excludes = [
             # Python
@@ -176,7 +181,7 @@ class MenuState:
             # If item was excluded, remove from excluded (include it)
             if is_excluded:
                 # Remove this directory from excluded
-                self.excluded_items.remove(path_str)
+                self.excluded_items.discard(path_str)
                 
                 # If this is a common directory, add it to selected items to override default exclusion
                 if path.name in self.common_excludes:
@@ -185,10 +190,13 @@ class MenuState:
                 # Recursively include all children
                 self._recursively_include(path)
                 
+                # Mark directory structure as dirty to force rescan
+                self.dirty_scan = True
+                
             # If item was explicitly selected, remove from selected (exclude it)
             elif is_selected:
                 # Remove from selected
-                self.selected_items.remove(path_str)
+                self.selected_items.discard(path_str)
                 
                 # Re-add to excluded items if it's a common directory
                 if path.name in self.common_excludes:
@@ -198,6 +206,9 @@ class MenuState:
                 if path.name in self.common_excludes:
                     self._recursively_exclude(path)
                 
+                # Mark directory structure as dirty to force rescan
+                self.dirty_scan = True
+                
             # If item was neither excluded nor selected, add to excluded
             else:
                 # Add to excluded
@@ -205,14 +216,20 @@ class MenuState:
                 
                 # Recursively exclude all children
                 self._recursively_exclude(path)
+                
+                # Mark directory structure as dirty to force rescan
+                self.dirty_scan = True
         else:
             # For files, just toggle the individual file
             if is_excluded:
-                self.excluded_items.remove(path_str)
+                self.excluded_items.discard(path_str)
             elif is_selected:
-                self.selected_items.remove(path_str)
+                self.selected_items.discard(path_str)
             else:
                 self.excluded_items.add(path_str)
+            
+            # Mark directory structure as dirty to force rescan
+            self.dirty_scan = True
             
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
@@ -276,6 +293,10 @@ class MenuState:
     
     def rebuild_visible_items(self) -> None:
         """Rebuild the list of visible items based on expanded directories."""
+        # Only rebuild if dirty flag is set
+        if not self.dirty_scan:
+            return
+
         # Auto-exclude common directories before building the list
         self._auto_exclude_common_dirs()
         
@@ -291,15 +312,28 @@ class MenuState:
             self.scroll_offset = max(0, self.cursor_pos)
         elif self.cursor_pos >= self.scroll_offset + self.max_visible:
             self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
+        
+        # Mark scan as complete and not dirty
+        self.scan_complete = True
+        self.dirty_scan = False
     
     def _auto_exclude_common_dirs(self) -> None:
         """Automatically exclude common directories that should be ignored."""
+        # Prevent repeated scans
+        if self.auto_exclude_complete:
+            return
+
         try:
             # Find all directories that match common excludes
             for common_dir in self.common_excludes:
                 for path in self.root_path.rglob(common_dir):
                     if path.is_dir() and path.name == common_dir:
-                        self.excluded_items.add(str(path))
+                        path_str = str(path)
+                        if path_str not in self.excluded_items:
+                            self.excluded_items.add(path_str)
+            
+            # Mark auto-exclusion as complete
+            self.auto_exclude_complete = True
         except Exception:
             # Ignore errors during auto-exclusion
             pass
@@ -318,6 +352,9 @@ class MenuState:
                 # If it's a common directory, add to selected items
                 if item.is_dir() and item.name in self.common_excludes:
                     self.selected_items.add(item_str)
+                
+                # Mark directory structure as dirty to force rescan
+                self.dirty_scan = True
         except Exception:
             # Ignore errors during recursive inclusion
             pass

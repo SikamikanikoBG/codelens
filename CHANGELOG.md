@@ -1,3 +1,17 @@
+## [0.5.10] - 2025-04-09
+
+### Fixed
+- Fixed critical issues with directory selection logic for more reliable file inclusion/exclusion
+- Improved handling of parent-child relationships in partially selected directories
+- Enhanced recursive selection and exclusion to properly handle all edge cases
+- Fixed inconsistencies in selection state indicators for better user experience
+- Corrected file selection behavior for files within common directories
+
+### Changed
+- Optimized directory traversal for better performance with large repositories
+- Improved error handling during recursive operations to prevent crashes
+- Enhanced visual feedback for selection states with clearer indicators
+
 ## [0.5.9] - 2025-04-08
 
 ### Added

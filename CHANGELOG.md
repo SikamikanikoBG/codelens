@@ -1,3 +1,15 @@
+## [0.5.4] - 2025-04-08
+
+### Added
+- Added ability to toggle exclusion of common directories in the interactive menu
+- Implemented explicit selection of directories that would normally be excluded
+- Added visual indicators for explicitly selected directories
+
+### Fixed
+- Fixed missing path_str conversion in menu rendering logic
+- Improved menu UI with clearer selection indicators
+- Enhanced status messages to show both excluded and explicitly included items
+
 ## [0.5.3] - 2025-04-07
 
 ### Added

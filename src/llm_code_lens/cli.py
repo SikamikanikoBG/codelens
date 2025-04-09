@@ -480,7 +480,7 @@ In my next message, I'll tell you about a new request or question about this cod
                 # We'll use a conservative limit of 2000 characters
                 if len(encoded_message) <= 2000:
                     # Use the query parameter approach
-                    chatgpt_url = f"https://chat.openai.com/?q={encoded_message}"
+                    chatgpt_url = f"https://chatgpt.com/?q={encoded_message}"
                     webbrowser.open(chatgpt_url)
                     
                     console.print("[green]ChatGPT opened in browser with content pre-loaded.[/]")

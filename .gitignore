@@ -30,3 +30,4 @@ ENV/
 .codelens/
 _crawler/
 .coverage
+.aider*

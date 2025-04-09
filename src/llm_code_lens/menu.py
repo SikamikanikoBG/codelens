@@ -45,11 +45,12 @@ class MenuState:
         self.auto_exclude_complete = False  # Flag to prevent repeated auto-exclusion scans
         
         # Scanning progress tracking
-        self.scanning_in_progress = False
+        self.scanning_in_progress = True  # Start in scanning state
         self.scan_current_dir = ""
         self.scan_progress = 0
         self.scan_total = 0
         self.cancel_scan_requested = False
+        self.status_message = "Initializing directory scan..."
         
         # Common directories to exclude by default
         self.common_excludes = [
@@ -176,8 +177,8 @@ class MenuState:
         self.editing_option = None     # Currently editing option (for text input)
         self.edit_buffer = ""          # Buffer for text input
         
-        # Load saved state if available
-        self._load_state()
+        # Load saved state if available - will be done after scanning completes
+        # self._load_state()
         
     def toggle_dir_expanded(self, path: Path) -> None:
         """Toggle directory expansion state."""
@@ -479,34 +480,45 @@ class MenuState:
         if not self.dirty_scan:
             return
 
-        # Set scanning state
-        self.scanning_in_progress = True
-        self.status_message = "Building directory structure..."
-        
-        # Auto-exclude common directories before building the list
-        self._auto_exclude_common_dirs()
-        
-        # Reset visible items
-        self.visible_items = []
-        
-        # Build the item list
-        self._build_item_list(self.root_path, 0)
-        
-        # Adjust cursor position if it's now out of bounds
-        if self.cursor_pos >= len(self.visible_items) and len(self.visible_items) > 0:
-            self.cursor_pos = len(self.visible_items) - 1
+        try:
+            # Auto-exclude common directories before building the list
+            if not self.auto_exclude_complete:
+                self._auto_exclude_common_dirs()
+                
+                # If scan was cancelled, don't continue
+                if self.cancel_scan_requested:
+                    self.dirty_scan = False
+                    self.scanning_in_progress = False
+                    return
             
-        # Adjust scroll offset if needed
-        if self.cursor_pos < self.scroll_offset:
-            self.scroll_offset = max(0, self.cursor_pos)
-        elif self.cursor_pos >= self.scroll_offset + self.max_visible:
-            self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
-        
-        # Mark scan as complete and not dirty
-        self.scan_complete = True
-        self.dirty_scan = False
-        self.scanning_in_progress = False
-        self.status_message = "Directory structure loaded"
+            # Update status
+            self.status_message = "Building directory tree..."
+            
+            # Reset visible items
+            self.visible_items = []
+            
+            # Build the item list
+            self._build_item_list(self.root_path, 0)
+            
+            # Adjust cursor position if it's now out of bounds
+            if self.cursor_pos >= len(self.visible_items) and len(self.visible_items) > 0:
+                self.cursor_pos = len(self.visible_items) - 1
+                
+            # Adjust scroll offset if needed
+            if self.cursor_pos < self.scroll_offset:
+                self.scroll_offset = max(0, self.cursor_pos)
+            elif self.cursor_pos >= self.scroll_offset + self.max_visible:
+                self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
+            
+            # Mark scan as complete and not dirty
+            self.scan_complete = True
+            self.dirty_scan = False
+            self.status_message = "Directory structure loaded"
+        except Exception as e:
+            self.status_message = f"Error building directory tree: {str(e)}"
+        finally:
+            # Always reset scanning state when done
+            self.scanning_in_progress = False
     
     def _auto_exclude_common_dirs(self) -> None:
         """Automatically exclude common directories that should be ignored."""
@@ -524,6 +536,7 @@ class MenuState:
             self.scan_progress = 0
             
             # Count directories first to provide progress percentage
+            self.status_message = "Counting directories for progress tracking..."
             for root, dirs, _ in os.walk(str(self.root_path)):
                 # Check for cancellation request
                 if self.cancel_scan_requested:
@@ -538,26 +551,37 @@ class MenuState:
                     self.status_message = f"Counting directories: {self.scan_total} found so far..."
             
             # Now find and exclude common directories
+            self.status_message = "Scanning for common directories to exclude..."
             for common_dir in self.common_excludes:
                 # Check for cancellation request
                 if self.cancel_scan_requested:
                     self.status_message = "Scan cancelled by user"
                     self.scanning_in_progress = False
                     return
+                
+                # Use a more efficient approach to find directories
+                for root, dirs, _ in os.walk(str(self.root_path)):
+                    # Check for cancellation request
+                    if self.cancel_scan_requested:
+                        self.status_message = "Scan cancelled by user"
+                        self.scanning_in_progress = False
+                        return
                     
-                for path in self.root_path.rglob(common_dir):
                     # Update progress
-                    self.scan_progress += 1
-                    self.scan_current_dir = str(path.relative_to(self.root_path))
+                    self.scan_progress += len(dirs)
+                    self.scan_current_dir = os.path.basename(root)
                     
                     # Update status message with progress percentage
                     progress_pct = min(100, int((self.scan_progress / max(1, self.scan_total)) * 100))
                     self.status_message = f"Scanning: {self.scan_current_dir} ({progress_pct}%)"
                     
-                    if path.is_dir() and path.name == common_dir:
-                        path_str = str(path)
-                        if path_str not in self.excluded_items:
-                            self.excluded_items.add(path_str)
+                    # Check if any of the directories match our common excludes
+                    for d in dirs[:]:  # Create a copy to safely modify during iteration
+                        if d == common_dir:
+                            path = Path(os.path.join(root, d))
+                            path_str = str(path)
+                            if path_str not in self.excluded_items:
+                                self.excluded_items.add(path_str)
             
             # Mark auto-exclusion as complete
             self.auto_exclude_complete = True
@@ -566,8 +590,8 @@ class MenuState:
             # Log error but continue
             self.status_message = f"Error during directory scan: {str(e)}"
         finally:
-            # Always reset scanning state
-            self.scanning_in_progress = False
+            # Don't reset scanning state here - let the caller do it
+            pass
             
     def _recursively_include(self, directory: Path) -> None:
         """Recursively include all files and subdirectories."""
@@ -1023,7 +1047,12 @@ def draw_menu(stdscr, state: MenuState) -> None:
         # Show status message
         try:
             stdscr.addstr(3, 2, f"Status: {state.status_message}")
-            stdscr.addstr(5, 2, f"Current directory: {state.scan_current_dir}")
+            
+            # Show current directory with better formatting
+            current_dir = state.scan_current_dir
+            if len(current_dir) > max_x - 20:
+                current_dir = "..." + current_dir[-(max_x - 23):]
+            stdscr.addstr(5, 2, f"Current directory: {current_dir}")
             
             # Draw progress bar (centered)
             bar_width = max_x - 20
@@ -1035,12 +1064,16 @@ def draw_menu(stdscr, state: MenuState) -> None:
             
             # Show cancel instruction
             stdscr.addstr(9, 2, "Press ESC to cancel scanning")
+            
+            # Add more helpful information
+            stdscr.addstr(11, 2, "Scanning large repositories may take some time...")
+            stdscr.addstr(12, 2, "This helps optimize the analysis by excluding irrelevant files.")
         except curses.error:
             pass
         
         # Draw footer
         footer_y = max_y - 2
-        footer = " Scanning large repositories may take some time... "
+        footer = " Please wait while we prepare your repository for analysis... "
         footer = footer.center(max_x-1, "=")
         try:
             stdscr.addstr(footer_y, 0, footer[:max_x-1], curses.color_pair(1))
@@ -1363,6 +1396,9 @@ def handle_input(key: int, state: MenuState) -> bool:
         if key == 27:  # ESC key
             state.cancel_scan_requested = True
             state.status_message = "Cancelling scan..."
+            # Don't exit the menu, just cancel the scan
+            return False
+        # Ignore all other input during scanning
         return False
         
     # Handle editing mode separately
@@ -1508,40 +1544,53 @@ def run_menu(path: Path, initial_settings: Dict[str, Any] = None) -> Dict[str, A
         state = MenuState(path, initial_settings)
         state.expanded_dirs.add(str(path))  # Start with root expanded
         
-        # Set a shorter timeout during scanning for more responsive UI updates
+        # Set a shorter timeout for responsive UI updates
         stdscr.timeout(100)
+        
+        # Initial scan phase - block UI until complete or cancelled
+        state.scanning_in_progress = True
+        state.dirty_scan = True
         
         # Main loop
         while True:
-            # Draw the menu
+            # Draw the menu (will show scanning screen if scanning_in_progress is True)
             draw_menu(stdscr, state)
             
-            # If not scanning, rebuild visible items
-            if not state.scanning_in_progress and state.dirty_scan:
-                state.rebuild_visible_items()
-            
-            try:
+            # Handle initial scanning phase
+            if state.scanning_in_progress:
+                # Check for input during scanning (for cancellation)
                 key = stdscr.getch()
-                if key == -1:  # No input
-                    # During scanning, we want to refresh the screen more often
-                    if state.scanning_in_progress:
-                        continue
-                    else:
-                        # If not scanning, wait for input
-                        stdscr.timeout(-1)
-                        key = stdscr.getch()
-                        # Reset timeout for next iteration
-                        stdscr.timeout(100)
+                if key == 27:  # ESC key
+                    state.cancel_scan_requested = True
+                    state.status_message = "Cancelling scan..."
+                elif key == -1:  # No input
+                    # If we're in the initial scan and it's not started yet, start it
+                    if state.dirty_scan and not state.scan_complete:
+                        # Perform the scan
+                        state._auto_exclude_common_dirs()
+                        state.rebuild_visible_items()
+                        
+                        # After scan completes, load saved state
+                        state._load_state()
+                        
+                        # Mark scanning as complete
+                        state.scanning_in_progress = False
+                continue
+            
+            # Normal menu interaction
+            try:
+                # If not scanning, wait for input
+                stdscr.timeout(-1)
+                key = stdscr.getch()
+                # Reset timeout for next iteration
+                stdscr.timeout(100)
                 
                 if handle_input(key, state):
                     break
             except KeyboardInterrupt:
                 # Handle Ctrl+C
-                if state.scanning_in_progress:
-                    state.cancel_scan_requested = True
-                    state.status_message = "Cancelling scan..."
-                else:
-                    break
+                state.cancelled = True
+                break
                 
         return state.get_results()
     

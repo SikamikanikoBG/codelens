@@ -27,6 +27,18 @@ class MenuState:
         self.status_message = ""
         self.cancelled = False  # Flag to indicate if user cancelled
         
+        # Add version update related attributes
+        self.new_version_available = False
+        self.current_version = ""
+        self.latest_version = ""
+        self.update_message = ""
+        self.show_update_dialog = False
+        self.update_in_progress = False
+        self.update_result = ""
+        
+        # Check for updates
+        self._check_for_updates()
+        
         # New flags for scanning optimization
         self.scan_complete = False
         self.dirty_scan = True  # Indicates directory structure needs rescanning
@@ -833,6 +845,64 @@ class MenuState:
             'cancelled': self.cancelled
         }
         
+    def _check_for_updates(self) -> None:
+        """Check if a newer version is available."""
+        try:
+            from llm_code_lens.version import check_for_newer_version, _get_current_version, _get_latest_version
+            
+            # Get current and latest versions
+            self.current_version = _get_current_version()
+            self.latest_version, _ = _get_latest_version()
+            
+            if self.latest_version and self.current_version:
+                # Compare versions
+                if self.latest_version != self.current_version:
+                    self.new_version_available = True
+                    self.update_message = f"New version available: {self.latest_version} (current: {self.current_version})"
+                    self.show_update_dialog = True
+        except Exception as e:
+            # Silently fail if version check fails
+            self.update_message = f"Failed to check for updates: {str(e)}"
+    
+    def update_to_latest_version(self) -> None:
+        """Update to the latest version."""
+        self.update_in_progress = True
+        self.update_result = "Updating..."
+        
+        try:
+            import subprocess
+            import sys
+            
+            # First attempt - normal upgrade
+            self.update_result = "Running pip install --upgrade..."
+            process = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "llm-code-lens"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if process.returncode != 0:
+                # If first attempt failed, try with --no-cache-dir
+                self.update_result = "First attempt failed. Trying with --no-cache-dir..."
+                process = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "llm-code-lens"],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+            
+            if process.returncode == 0:
+                self.update_result = f"Successfully updated to version {self.latest_version}. Please restart LLM Code Lens."
+                # Hide the dialog after successful update
+                self.show_update_dialog = False
+            else:
+                self.update_result = f"Update failed: {process.stderr}"
+        except Exception as e:
+            self.update_result = f"Update failed: {str(e)}"
+        finally:
+            self.update_in_progress = False
+            
     def _save_state(self) -> None:
         """Save the current state to a file."""
         try:
@@ -1140,6 +1210,56 @@ def draw_menu(stdscr, state: MenuState) -> None:
     except curses.error:
         pass
     
+    # Draw update dialog if needed
+    if state.show_update_dialog:
+        # Calculate dialog dimensions and position
+        dialog_width = 60
+        dialog_height = 8
+        dialog_x = max(0, (max_x - dialog_width) // 2)
+        dialog_y = max(0, (max_y - dialog_height) // 2)
+        
+        # Draw dialog box
+        for y in range(dialog_height):
+            try:
+                if y == 0 or y == dialog_height - 1:
+                    # Draw top and bottom borders
+                    stdscr.addstr(dialog_y + y, dialog_x, "+" + "-" * (dialog_width - 2) + "+")
+                else:
+                    # Draw side borders
+                    stdscr.addstr(dialog_y + y, dialog_x, "|" + " " * (dialog_width - 2) + "|")
+            except curses.error:
+                pass
+        
+        # Draw dialog title
+        title = " Update Available "
+        title_x = dialog_x + (dialog_width - len(title)) // 2
+        try:
+            stdscr.addstr(dialog_y, title_x, title, curses.color_pair(1) | curses.A_BOLD)
+        except curses.error:
+            pass
+        
+        # Draw update message
+        message_lines = [
+            state.update_message,
+            "",
+            "Do you want to update now?",
+            "",
+            "[Y] Yes   [N] No"
+        ]
+        
+        if state.update_in_progress:
+            message_lines = [state.update_result, "", "Updating, please wait..."]
+        elif state.update_result:
+            message_lines = [state.update_result, "", "[Enter] Continue"]
+        
+        for i, line in enumerate(message_lines):
+            if i < dialog_height - 2:  # Ensure we don't draw outside the dialog
+                line_x = dialog_x + (dialog_width - len(line)) // 2
+                try:
+                    stdscr.addstr(dialog_y + i + 1, line_x, line)
+                except curses.error:
+                    pass
+    
     # Draw footer with improved controls
     footer_y = max_y - 2
     
@@ -1149,9 +1269,13 @@ def draw_menu(stdscr, state: MenuState) -> None:
     elif state.active_section == 'files':
         # Show file navigation controls with better organization
         controls = " ↑/↓: Navigate | →: Expand | ←: Collapse | Space: Select | Tab: Switch to Options | Enter: Confirm | Esc: Cancel "
+        if state.new_version_available:
+            controls = " F8: Update | " + controls
     else:
         # Show options controls
         controls = " ↑/↓: Navigate | Space: Toggle/Edit | Tab: Switch to Files | Enter: Confirm | Esc: Cancel "
+        if state.new_version_available:
+            controls = " F8: Update | " + controls
         
     controls = controls.center(max_x-1, "=")
     try:
@@ -1187,6 +1311,17 @@ def draw_menu(stdscr, state: MenuState) -> None:
                     status = " All files included by default | Space: Toggle selection (recursive for directories) | Enter: Confirm "
             else:
                 status = " Use Space to toggle options or edit text fields | Enter: Confirm "
+        
+        # Add version info if available
+        if state.current_version:
+            version_info = f"v{state.current_version}"
+            if state.new_version_available:
+                version_info += f" (New: v{state.latest_version} available! Press F8 to update)"
+            
+            # Add version info to status if there's room
+            if len(status) + len(version_info) + 3 < max_x:
+                padding = max_x - len(status) - len(version_info) - 3
+                status += " " * padding + version_info + " "
                 
         status = status.ljust(max_x-1)
         try:
@@ -1199,6 +1334,30 @@ def draw_menu(stdscr, state: MenuState) -> None:
 
 def handle_input(key: int, state: MenuState) -> bool:
     """Handle user input. Returns True if user wants to exit."""
+    # Handle update dialog first
+    if state.show_update_dialog:
+        if state.update_in_progress:
+            # Don't handle input during update
+            return False
+        
+        if state.update_result:
+            # After update is complete, any key dismisses the dialog
+            if key == 10 or key == 27:  # Enter or Escape
+                state.show_update_dialog = False
+                state.update_result = ""
+            return False
+        
+        # Handle update dialog inputs
+        if key == ord('y') or key == ord('Y'):
+            # Start the update process
+            state.update_to_latest_version()
+            return False
+        elif key == ord('n') or key == ord('N') or key == 27:  # 'n', 'N', or Escape
+            # Dismiss the dialog
+            state.show_update_dialog = False
+            return False
+        return False
+        
     # Handle scanning cancellation
     if state.scanning_in_progress:
         if key == 27:  # ESC key
@@ -1317,6 +1476,10 @@ def handle_input(key: int, state: MenuState) -> bool:
     elif key == curses.KEY_F7:
         # Open current file in LLM
         state._open_in_llm()
+    elif key == curses.KEY_F8:
+        # Show update dialog if updates are available
+        if state.new_version_available:
+            state.show_update_dialog = True
     elif key == curses.KEY_DC:  # Delete key
         if state.active_section == 'options' and state.option_cursor >= 6 and state.option_cursor < 6 + len(state.options['exclude_patterns']):
             pattern_index = state.option_cursor - 6

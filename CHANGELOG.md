@@ -1,3 +1,20 @@
+## [0.5.12] - 2025-04-10
+
+### Added
+- Improved folder scanning UI with real-time progress bar and cancellation option
+- Added version update notification and automatic update feature in menu
+- Enhanced ChatGPT integration with URL query parameter for pre-populating content
+
+### Changed
+- Optimized directory scanning process for large repositories
+- Improved user feedback during scanning with detailed progress information
+- Enhanced visual indicators for scanning progress with animation
+
+### Fixed
+- Fixed UI freezing during scanning of large repositories
+- Improved cancellation mechanism for directory scanning
+- Enhanced error handling during scanning process
+
 ## [0.5.11] - 2025-04-09
 
 ### Changed

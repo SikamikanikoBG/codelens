@@ -1057,30 +1057,62 @@ def draw_menu(stdscr, state: MenuState) -> None:
         # Calculate progress percentage
         progress_pct = min(100, int((state.scan_progress / max(1, state.scan_total)) * 100))
         
-        # Show status message
+        # Show status message with better formatting
         try:
-            stdscr.addstr(3, 2, f"Status: {state.status_message}")
+            # Status message with timestamp
+            import time
+            timestamp = time.strftime("%H:%M:%S")
+            status_line = f"Status [{timestamp}]: {state.status_message}"
+            stdscr.addstr(3, 2, status_line)
             
             # Show current directory with better formatting
             current_dir = state.scan_current_dir
             if len(current_dir) > max_x - 20:
                 current_dir = "..." + current_dir[-(max_x - 23):]
-            stdscr.addstr(5, 2, f"Current directory: {current_dir}")
             
-            # Draw progress bar (centered)
+            # Show directory with highlight
+            stdscr.addstr(5, 2, "Current directory: ")
+            stdscr.addstr(5, 20, current_dir, curses.color_pair(5) | curses.A_BOLD)
+            
+            # Show scan statistics
+            stdscr.addstr(6, 2, f"Directories found: {state.scan_total}")
+            stdscr.addstr(6, 30, f"Processed: {state.scan_progress}")
+            
+            # Draw progress bar with better visual feedback
             bar_width = max_x - 20
             filled_width = int((bar_width * progress_pct) / 100)
             
-            progress_bar = "[" + "=" * filled_width + " " * (bar_width - filled_width) + "]"
-            stdscr.addstr(7, 2, f"Progress: {progress_pct}% ")
-            stdscr.addstr(7, 15, progress_bar)
+            # Use different colors for different progress levels
+            bar_color = curses.color_pair(3)  # Default green
+            if progress_pct < 25:
+                bar_color = curses.color_pair(4)  # Red for early progress
+            elif progress_pct < 50:
+                bar_color = curses.color_pair(5)  # Yellow for mid progress
             
-            # Show cancel instruction
-            stdscr.addstr(9, 2, "Press ESC to cancel scanning")
+            # Draw progress percentage
+            stdscr.addstr(8, 2, f"Progress: {progress_pct}% ")
+            
+            # Draw progress bar background
+            stdscr.addstr(8, 15, "[" + " " * bar_width + "]")
+            
+            # Draw filled portion of progress bar
+            if filled_width > 0:
+                stdscr.addstr(8, 16, "=" * filled_width, bar_color | curses.A_BOLD)
+            
+            # Show cancel instruction with highlight
+            stdscr.addstr(10, 2, "Press ", curses.A_BOLD)
+            stdscr.addstr(10, 8, "ESC", curses.color_pair(7) | curses.A_BOLD)
+            stdscr.addstr(10, 12, " to cancel scanning", curses.A_BOLD)
             
             # Add more helpful information
-            stdscr.addstr(11, 2, "Scanning large repositories may take some time...")
-            stdscr.addstr(12, 2, "This helps optimize the analysis by excluding irrelevant files.")
+            stdscr.addstr(12, 2, "Scanning large repositories may take some time...")
+            stdscr.addstr(13, 2, "This helps optimize the analysis by excluding irrelevant files.")
+            
+            # Add animation to show activity even when progress doesn't change
+            import time
+            animation_chars = "|/-\\"
+            animation_idx = int(time.time() * 5) % len(animation_chars)
+            stdscr.addstr(15, 2, f"Working {animation_chars[animation_idx]}")
         except curses.error:
             pass
         

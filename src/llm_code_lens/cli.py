@@ -417,6 +417,7 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
         # Import pyperclip for clipboard operations
         try:
             import pyperclip
+            import urllib.parse
         except ImportError:
             console.print("[yellow]Error: The pyperclip package is required for LLM integration.[/]")
             console.print("[yellow]Please install it with: pip install pyperclip[/]")
@@ -456,13 +457,13 @@ In my next message, I'll tell you about a new request or question about this cod
             for file in sorted(sql_files):
                 full_message += f"# {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n"
         
+        # Copy the full message to clipboard (for all providers as backup)
+        pyperclip.copy(full_message)
+        
         # Open the appropriate provider
         if provider.lower() == 'claude':
             # Open Claude in a new chat
             webbrowser.open("https://claude.ai/new")
-            
-            # Copy the full message to clipboard
-            pyperclip.copy(full_message)
             
             console.print("[green]Claude opened in browser.[/]")
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
@@ -470,23 +471,52 @@ In my next message, I'll tell you about a new request or question about this cod
             return True
                 
         elif provider.lower() == 'chatgpt':
-            # Open ChatGPT
-            webbrowser.open("https://chat.openai.com/")
-            
-            # Copy the full message to clipboard
-            pyperclip.copy(full_message)
-            
-            console.print("[green]ChatGPT opened in browser.[/]")
-            console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
-            console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
-            return True
+            # For ChatGPT, try to use the query parameter approach
+            try:
+                # Encode the message for URL
+                encoded_message = urllib.parse.quote(full_message)
+                
+                # Check if the URL would be too long (most browsers have limits around 2000-8000 chars)
+                # We'll use a conservative limit of 2000 characters
+                if len(encoded_message) <= 2000:
+                    # Use the query parameter approach
+                    chatgpt_url = f"https://chatgpt.com/?q={encoded_message}"
+                    webbrowser.open(chatgpt_url)
+                    
+                    console.print("[green]ChatGPT opened in browser with content pre-loaded.[/]")
+                    console.print("[green]The content has also been copied to your clipboard as a backup.[/]")
+                    console.print("[green]If the content doesn't appear automatically, press Ctrl+V to paste it.[/]")
+                else:
+                    # Fallback to regular URL if content is too large
+                    webbrowser.open("https://chat.openai.com/")
+                    
+                    console.print("[green]ChatGPT opened in browser.[/]")
+                    console.print("[green]The content is too large for URL parameters (browser limitations).[/]")
+                    console.print("[green]The complete analysis has been copied to your clipboard.[/]")
+                    console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
+                
+                if debug:
+                    console.print(f"[blue]URL parameter length: {len(encoded_message)} characters[/]")
+                    if len(encoded_message) > 2000:
+                        console.print("[blue]URL parameter too long, using clipboard only[/]")
+                
+                return True
+            except Exception as e:
+                # Fallback to regular approach if URL encoding fails
+                if debug:
+                    console.print(f"[yellow]Error with URL parameter approach: {str(e)}[/]")
+                    console.print("[yellow]Falling back to clipboard approach[/]")
+                
+                webbrowser.open("https://chat.openai.com/")
+                
+                console.print("[green]ChatGPT opened in browser.[/]")
+                console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
+                console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
+                return True
             
         elif provider.lower() == 'gemini':
             # Open Gemini
             webbrowser.open("https://gemini.google.com/")
-            
-            # Copy the full message to clipboard
-            pyperclip.copy(full_message)
             
             console.print("[green]Gemini opened in browser.[/]")
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")

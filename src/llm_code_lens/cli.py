@@ -46,87 +46,61 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
         ignore_patterns = []
         
     path_str = str(path)
+
     default_ignores = {
+        # Version control and cache directories
         '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
-        'node_modules', 'venv', 'env', 'dist', 'build', '.tox', 'htmlcov',
-        # Additional ignores for package lock files
+        '.vscode-test', '.nyc_output', '.ipynb_checkpoints', '.tox',
+        
+        # Language/framework specific directories
+        'node_modules', 'venv', 'env', 'dist', 'build', 'htmlcov',
+        '.next', 'next-env.d.ts', 'bin', 'obj', 'DerivedData', 
+        'vendor', '.bundle', 'target', 'blib', 'pm_to_blib',
+        '.dart_tool', 'pkg', 'out', 'coverage',
+        
+        # Package lock files
         'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
-        # Additional ignores for TypeScript, Node.js, and other languages
-        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
-        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
-        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
-        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
-        '*.synctex.gz', '*.pyc', '*.pyo', '*.pyd', '*.egg-info', '*.egg',
-        '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj', '*.exe',
+        'Gemfile.lock', 'composer.lock', 'composer.json',
+        
+        # Config files
+        'tsconfig.json', 'jsconfig.json',
+        
+        # System files
+        '.DS_Store',
+        
+        # Log files
+        '*.log', 'npm-debug.log', 'yarn-error.log',
+        
+        # Temp/backup files
+        '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
+        
+        # Binary and compiled files
+        '*.exe', '*.dll', '*.so', '*.dylib', '*.a', '*.o', '*.obj',
         '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
-        '*.ipynb_checkpoints', '.vscode-test', '.nyc_output', 'coverage',
-        '__pycache__', '*.py[cod]', '*$py.class', '*.pyo', '*.pyd', '*.egg-info',
-        '*.egg', '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj',
-        '*.exe', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
-        '.DS_Store', '*.log', '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
+        '*.lib', '*.class', '*.jar', '*.war', '*.ear', '*.pyc', '*.pyo', '*.pyd',
+        '*.py[cod]', '*$py.class', '*.whl', '*.mexw64', '*.test', '*.out',
+        '*.rs.bk', '*.build',
+        
+        # Document build files
         '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
         '*.fls', '*.fdb_latexmk', '*.synctex.gz',
-        # Additional ignores for Next.js
-        '.next', 'next-env.d.ts',
-        # Additional ignores for C#
-        'bin', 'obj', '*.csproj', '*.user', '*.suo', '*.ncb', '*.sln.docstates',
-        # Additional ignores for JavaScript/TypeScript
-        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
-        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
-        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
-        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
-        '*.synctex.gz',
-        # Additional ignores for Python
-        '__pycache__', '*.py[cod]', '*$py.class', '*.pyo', '*.pyd', '*.egg-info',
-        '*.egg', '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj', '*.exe',
-        '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
-        # Additional ignores for Java
-        'bin', 'build', 'out', '*.class', '*.jar', '*.war', '*.ear', '*.log',
-        # Additional ignores for PHP
-        'vendor', 'composer.lock', 'composer.json', '*.log',
-        # Additional ignores for Go
-        'bin', 'pkg', '*.go', '*.exe', '*.test', '*.out', '*.log',
-        # Additional ignores for Ruby
-        '.bundle', 'Gemfile.lock', '*.rbc', '*.log',
-        # Additional ignores for Rust
-        'target', '*.rs.bk', '*.log',
-        # Additional ignores for Swift
-        'DerivedData', '*.build', '*.xcodeproj', '*.xcworkspace', '*.log',
-        # Additional ignores for SQL
-        '*.bak', '*.tmp', '*.log',
-        # Additional ignores for C++
-        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
-        # Additional ignores for Kotlin
-        'build', 'out', '*.class', '*.jar', '*.war', '*.ear', '*.log',
-        # Additional ignores for MATLAB
-        'bin', 'build', '*.mexw64', '*.dll', '*.exe', '*.log',
-        # Additional ignores for Objective-C
-        'DerivedData', '*.build', '*.xcodeproj', '*.xcworkspace', '*.log',
-        # Additional ignores for R
-        '.Rhistory', '.RData', '*.Rout', '*.log',
-        # Additional ignores for Visual Basic
-        'bin', 'obj', '*.exe', '*.dll', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
-        # Additional ignores for Perl
-        'blib', 'pm_to_blib', '*.bak', '*.tmp', '*.log',
-        # Additional ignores for TypeScript
-        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
-        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
-        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
-        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
-        '*.synctex.gz',
-        # Additional ignores for Assembly language
-        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
-        # Additional ignores for Dart
-        'build', '.dart_tool', '*.log',
-        # Additional ignores for CSS
-        '*.css.map', '*.min.css', '*.log',
-        # Additional ignores for Delphi
-        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
-        # Additional ignores for Fortran
-        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
-        # Additional ignores for Ada
-        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log'
+        
+        # Source files that shouldn't normally be ignored
+        '*.go',
+        
+        # Project files
+        '*.csproj', '*.user', '*.suo', '*.sln.docstates', '*.xcodeproj', '*.xcworkspace',
+        
+        # CSS files
+        '*.css.map', '*.min.css',
+        
+        # R files
+        '.Rhistory', '.RData', '*.Rout',
+        
+        # Utility files
+        'pnp.loader.mjs'
     }
+
     
     # Check if the path is a directory and should be ignored
     if path.is_dir():

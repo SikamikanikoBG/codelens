@@ -1,3 +1,17 @@
+## [0.5.13] - 2025-05-01
+
+### Added
+- Added comprehensive default ignores for Python, JavaScript, Node.js, TypeScript, and other top 15 popular languages
+- Enhanced exclusions for system files and directories created by various languages
+- Extended `should_ignore` functionality to exclude subfolders based on default ignores
+- Added specific exclusions for Next.js files (.next directory and next-env.d.ts)
+
+### Changed
+- Improved .gitignore handling and refactored cli.py for better ignore patterns
+
+### Fixed
+- N/A
+
 ## [0.5.12] - 2025-04-10
 
 ### Added

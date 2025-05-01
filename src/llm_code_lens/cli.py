@@ -68,6 +68,12 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
         '*.fls', '*.fdb_latexmk', '*.synctex.gz'
     }
     
+    # Check if the path is a directory and should be ignored
+    if path.is_dir():
+        for pattern in default_ignores:
+            if pattern in path.name:
+                return True
+    
     # Check default ignores
     for pattern in default_ignores:
         if pattern in path_str:

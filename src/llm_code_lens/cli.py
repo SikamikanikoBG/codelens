@@ -67,7 +67,65 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
         '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
         '*.fls', '*.fdb_latexmk', '*.synctex.gz',
         # Additional ignores for Next.js
-        '.next', 'next-env.d.ts'
+        '.next', 'next-env.d.ts',
+        # Additional ignores for C#
+        'bin', 'obj', '*.csproj', '*.user', '*.suo', '*.ncb', '*.sln.docstates',
+        # Additional ignores for JavaScript/TypeScript
+        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
+        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
+        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
+        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
+        '*.synctex.gz',
+        # Additional ignores for Python
+        '__pycache__', '*.py[cod]', '*$py.class', '*.pyo', '*.pyd', '*.egg-info',
+        '*.egg', '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj', '*.exe',
+        '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
+        # Additional ignores for Java
+        'bin', 'build', 'out', '*.class', '*.jar', '*.war', '*.ear', '*.log',
+        # Additional ignores for PHP
+        'vendor', 'composer.lock', 'composer.json', '*.log',
+        # Additional ignores for Go
+        'bin', 'pkg', '*.go', '*.exe', '*.test', '*.out', '*.log',
+        # Additional ignores for Ruby
+        '.bundle', 'Gemfile.lock', '*.rbc', '*.log',
+        # Additional ignores for Rust
+        'target', '*.rs.bk', '*.log',
+        # Additional ignores for Swift
+        'DerivedData', '*.build', '*.xcodeproj', '*.xcworkspace', '*.log',
+        # Additional ignores for SQL
+        '*.bak', '*.tmp', '*.log',
+        # Additional ignores for C++
+        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
+        # Additional ignores for Kotlin
+        'build', 'out', '*.class', '*.jar', '*.war', '*.ear', '*.log',
+        # Additional ignores for MATLAB
+        'bin', 'build', '*.mexw64', '*.dll', '*.exe', '*.log',
+        # Additional ignores for Objective-C
+        'DerivedData', '*.build', '*.xcodeproj', '*.xcworkspace', '*.log',
+        # Additional ignores for R
+        '.Rhistory', '.RData', '*.Rout', '*.log',
+        # Additional ignores for Visual Basic
+        'bin', 'obj', '*.exe', '*.dll', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
+        # Additional ignores for Perl
+        'blib', 'pm_to_blib', '*.bak', '*.tmp', '*.log',
+        # Additional ignores for TypeScript
+        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
+        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
+        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
+        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
+        '*.synctex.gz',
+        # Additional ignores for Assembly language
+        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
+        # Additional ignores for Dart
+        'build', '.dart_tool', '*.log',
+        # Additional ignores for CSS
+        '*.css.map', '*.min.css', '*.log',
+        # Additional ignores for Delphi
+        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
+        # Additional ignores for Fortran
+        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log',
+        # Additional ignores for Ada
+        'bin', 'obj', '*.exe', '*.dll', '*.lib', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf', '*.log'
     }
     
     # Check if the path is a directory and should be ignored

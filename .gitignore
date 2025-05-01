@@ -31,3 +31,4 @@ ENV/
 _crawler/
 .coverage
 .aider*
+run_aider.bat

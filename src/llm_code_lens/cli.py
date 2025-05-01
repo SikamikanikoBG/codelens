@@ -65,7 +65,9 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
         '*.exe', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
         '.DS_Store', '*.log', '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
         '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
-        '*.fls', '*.fdb_latexmk', '*.synctex.gz'
+        '*.fls', '*.fdb_latexmk', '*.synctex.gz',
+        # Additional ignores for Next.js
+        '.next', 'next-env.d.ts'
     }
     
     # Check if the path is a directory and should be ignored

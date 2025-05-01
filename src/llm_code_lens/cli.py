@@ -48,7 +48,24 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
     path_str = str(path)
     default_ignores = {
         '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
-        'node_modules', 'venv', 'env', 'dist', 'build', '.tox', 'htmlcov'
+        'node_modules', 'venv', 'env', 'dist', 'build', '.tox', 'htmlcov',
+        # Additional ignores for package lock files
+        'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+        # Additional ignores for TypeScript, Node.js, and other languages
+        'node_modules', 'npm-debug.log', 'yarn-error.log', 'pnp.loader.mjs',
+        'tsconfig.json', 'jsconfig.json', '.DS_Store', '*.log', '*.tmp',
+        '*.bak', '*.swp', '*.swo', '*.orig', '*.aux', '*.toc', '*.out',
+        '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot', '*.fls', '*.fdb_latexmk',
+        '*.synctex.gz', '*.pyc', '*.pyo', '*.pyd', '*.egg-info', '*.egg',
+        '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj', '*.exe',
+        '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
+        '*.ipynb_checkpoints', '.vscode-test', '.nyc_output', 'coverage',
+        '__pycache__', '*.py[cod]', '*$py.class', '*.pyo', '*.pyd', '*.egg-info',
+        '*.egg', '*.whl', '*.so', '*.dll', '*.dylib', '*.a', '*.o', '*.obj',
+        '*.exe', '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
+        '.DS_Store', '*.log', '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
+        '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
+        '*.fls', '*.fdb_latexmk', '*.synctex.gz'
     }
     
     # Check default ignores

@@ -133,6 +133,86 @@ def is_binary(file_path: Path) -> bool:
         return True
     return False
 
+def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bool:
+    """Determine if a file or directory should be ignored based on patterns."""
+    if ignore_patterns is None:
+        ignore_patterns = []
+        
+    path_str = str(path)
+
+    default_ignores = {
+        # Version control and cache directories
+        '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
+        '.vscode-test', '.nyc_output', '.ipynb_checkpoints', '.tox',
+        
+        # Language/framework specific directories
+        'node_modules', 'venv', 'env', 'dist', 'build', 'htmlcov',
+        '.next', 'next-env.d.ts', 'bin', 'obj', 'DerivedData', 
+        'vendor', '.bundle', 'target', 'blib', 'pm_to_blib',
+        '.dart_tool', 'pkg', 'out', 'coverage',
+        
+        # Package lock files
+        'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+        'Gemfile.lock', 'composer.lock', 'composer.json',
+        
+        # Config files
+        'tsconfig.json', 'jsconfig.json',
+        
+        # System files
+        '.DS_Store',
+        
+        # Log files
+        '*.log', 'npm-debug.log', 'yarn-error.log',
+        
+        # Temp/backup files
+        '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
+        
+        # Binary and compiled files
+        '*.exe', '*.dll', '*.so', '*.dylib', '*.a', '*.o', '*.obj',
+        '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
+        '*.lib', '*.class', '*.jar', '*.war', '*.ear', '*.pyc', '*.pyo', '*.pyd',
+        '*.py[cod]', '*$py.class', '*.whl', '*.mexw64', '*.test', '*.out',
+        '*.rs.bk', '*.build',
+        
+        # Document build files
+        '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
+        '*.fls', '*.fdb_latexmk', '*.synctex.gz',
+        
+        # Source files that shouldn't normally be ignored
+        '*.go',
+        
+        # Project files
+        '*.csproj', '*.user', '*.suo', '*.sln.docstates', '*.xcodeproj', '*.xcworkspace',
+        
+        # CSS files
+        '*.css.map', '*.min.css',
+        
+        # R files
+        '.Rhistory', '.RData', '*.Rout',
+        
+        # Utility files
+        'pnp.loader.mjs'
+    }
+
+    
+    # Check if the path is a directory and should be ignored
+    if path.is_dir():
+        for pattern in default_ignores:
+            if pattern in path.name or any(pattern in part for part in path.parts):
+                return True
+    
+    # Check default ignores
+    for pattern in default_ignores:
+        if pattern in path_str or any(pattern in part for part in path.parts):
+            return True
+    
+    # Check custom ignore patterns
+    for pattern in ignore_patterns:
+        if pattern in path_str or any(pattern in part for part in path.parts):
+            return True
+            
+    return False
+
 def split_content_by_tokens(content: str, chunk_size: int = 100000) -> List[str]:
     """
     Split content into chunks based on token count.

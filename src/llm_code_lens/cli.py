@@ -479,16 +479,14 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
                 combined = {
                     'summary': result.summary,
                     'insights': result.insights,
-                    'files': result.files,
-                    'tree': getattr(result, 'tree', None)  # Preserve tree if present
+                    'files': result.files
                 }
             else:
                 # Convert AnalysisResult to a simple dict for easier processing
                 result_dict = {
                     'summary': result.summary,
                     'insights': result.insights,
-                    'files': result.files,
-                    'tree': getattr(result, 'tree', None)  # Preserve tree if present
+                    'files': result.files
                 }
                 _combine_fs_results(combined, result_dict)
         else:

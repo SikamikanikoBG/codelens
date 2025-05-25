@@ -3,9 +3,13 @@ Configuration file analyzers for project context.
 """
 
 import json
-import tomli
 from pathlib import Path
 from typing import Dict, Optional, List
+
+try:
+    import tomli
+except ImportError:
+    tomli = None
 
 def analyze_package_json(file_path: Path) -> Optional[Dict]:
     """Extract key information from package.json."""

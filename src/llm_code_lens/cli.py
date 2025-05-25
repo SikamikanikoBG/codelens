@@ -269,6 +269,12 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
         try:
             content = file_path.read_text(encoding='utf-8')
             file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
+
+            # Update progress
+            processed_files += 1
+            if progress and task_id:
+                progress.update(task_id, advance=1, description=f"Exporting: {file_path.name}")
+
         except Exception as e:
             console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
             continue

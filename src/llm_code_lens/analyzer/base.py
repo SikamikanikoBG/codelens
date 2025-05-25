@@ -14,21 +14,7 @@ class AnalysisResult:
     def to_text(self) -> str:
         """Convert analysis to LLM-friendly text format."""
         from ..formatters.llm import format_analysis
-
-        # Format the analysis using the formatter
-        formatted = format_analysis(self)
-
-        # Add tree information if available
-        if 'tree' in self.__dict__.get('files', {}).values():
-            tree_outputs = []
-            for file_data in self.files.values():
-                if 'tree' in file_data:
-                    tree_outputs.append(f"\nFile: {file_data.get('name', 'Unknown')}\n{file_data['tree']}")
-
-            # Add all trees to the formatted output
-            return f"{formatted}\n\nPROJECT TREE(S):\n{''.join(tree_outputs)}"
-
-        return formatted
+        return format_analysis(self)
 
     def to_json(self) -> str:
         """Convert analysis to JSON format."""
@@ -200,18 +186,6 @@ class ProjectAnalyzer:
         analysis['summary']['structure']['project_tree'] = project_tree
         analysis['summary']['structure']['tree_summary'] = summary_tree
 
-        # Generate project tree before final metrics
-        from ..utils.tree import ProjectTree
-
-        # Get excluded paths from analysis
-        excluded_paths = getattr(self, '_excluded_paths', set())
-
-        # Generate tree structure
-        tree_generator = ProjectTree(ignore_patterns=[], max_depth=5)
-        project_tree = tree_generator.generate_tree(path, excluded_paths)
-
-        # Store in analysis
-        analysis['tree'] = project_tree
 
         # Calculate final metrics
         self._calculate_final_metrics(analysis)

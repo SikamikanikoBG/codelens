@@ -186,6 +186,21 @@ class ProjectAnalyzer:
         analysis['summary']['structure']['project_tree'] = project_tree
         analysis['summary']['structure']['tree_summary'] = summary_tree
 
+        # Generate project tree before final metrics
+        from ..utils.tree import ProjectTree
+
+        # Get excluded paths from analysis
+        excluded_paths = set()
+        if hasattr(self, '_excluded_paths'):
+            excluded_paths = self._excluded_paths
+
+        # Generate tree structure
+        tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
+        project_tree = tree_generator.generate_tree(path, excluded_paths)
+
+        # Store in analysis
+        analysis['tree'] = project_tree
+
         # Calculate final metrics
         self._calculate_final_metrics(analysis)
 

@@ -31,6 +31,15 @@ def format_analysis(result: AnalysisResult) -> str:
         ])
 
     # NEW: Project Tree from Analysis
+    if hasattr(result, 'analysis') and 'tree' in result.analysis:
+        sections.extend([
+            "PROJECT STRUCTURE:",
+            "=" * 80,
+            result.analysis['tree'],
+            "",
+        ])
+
+    # NEW: Project Tree from Analysis
     if 'tree' in result.analysis:
         sections.extend([
             "PROJECT STRUCTURE:",

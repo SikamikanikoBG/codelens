@@ -204,12 +204,10 @@ class ProjectAnalyzer:
         from ..utils.tree import ProjectTree
 
         # Get excluded paths from analysis
-        excluded_paths = set()
-        if hasattr(self, '_excluded_paths'):
-            excluded_paths = self._excluded_paths
+        excluded_paths = getattr(self, '_excluded_paths', set())
 
         # Generate tree structure
-        tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
+        tree_generator = ProjectTree(ignore_patterns=[], max_depth=5)
         project_tree = tree_generator.generate_tree(path, excluded_paths)
 
         # Store in analysis

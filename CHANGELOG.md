@@ -1,3 +1,25 @@
+## [0.5.14] - 2025-05-25
+
+### Added
+- Enhanced analysis context with project configuration detection (package.json, tsconfig.json, README.md)
+- Project tree structure visualization in analysis output
+- Sample code snippets extraction for better LLM context
+- Improved React/TypeScript/Next.js analysis with enhanced regex patterns
+- React component detection (function/class components)
+- React hooks usage analysis (built-in and custom hooks)
+- TypeScript interface and type alias detection
+- .gitignore file integration with optional support (enabled by default)
+- Interactive menu option to toggle .gitignore respect (F7 key)
+
+### Changed
+- JavaScript analyzer now provides much richer analysis data
+- Analysis output includes project tree structure early in the document
+- Enhanced formatting of JavaScript/TypeScript analysis results
+- Menu interface includes gitignore toggle option
+
+### Fixed
+- N/A
+
 ## [0.5.13] - 2025-05-01
 
 ### Added

@@ -193,6 +193,64 @@ class ProjectAnalyzer:
 
         return AnalysisResult(**analysis)
 
+    def _analyze_package_json(self, path: Path):
+        from .config import analyze_package_json
+        return analyze_package_json(path / 'package.json')
+
+    def _analyze_tsconfig(self, path: Path):
+        from .config import analyze_tsconfig
+        return analyze_tsconfig(path / 'tsconfig.json')
+
+    def _analyze_next_config(self, path: Path):
+        config_file = path / 'next.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'next.js config'}
+        return None
+
+    def _analyze_tailwind_config(self, path: Path):
+        config_file = path / 'tailwind.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'tailwind config'}
+        return None
+
+    def _analyze_pyproject_toml(self, path: Path):
+        config_file = path / 'pyproject.toml'
+        if config_file.exists():
+            try:
+                import tomli
+                with open(config_file, 'rb') as f:
+                    data = tomli.load(f)
+                return {'name': data.get('project', {}).get('name'), 'type': 'python project'}
+            except:
+                return {'error': 'Failed to parse pyproject.toml'}
+        return None
+
+    def _analyze_requirements(self, path: Path):
+        req_file = path / 'requirements.txt'
+        if req_file.exists():
+            try:
+                with open(req_file, 'r') as f:
+                    lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+                return {'dependencies': len(lines), 'type': 'python requirements'}
+            except:
+                return {'error': 'Failed to parse requirements.txt'}
+        return None
+
+    def _analyze_env_example(self, path: Path):
+        env_file = path / '.env.example'
+        if env_file.exists():
+            try:
+                with open(env_file, 'r') as f:
+                    lines = [line for line in f if '=' in line and not line.startswith('#')]
+                return {'env_vars': len(lines), 'type': 'environment template'}
+            except:
+                return {'error': 'Failed to parse .env.example'}
+        return None
+
+    def _extract_readme_summary(self, path: Path):
+        from .config import extract_readme_summary
+        return extract_readme_summary(path)
+
     def _analyze_project_configuration(self, path: Path) -> dict:
         """Analyze project configuration files for additional context."""
         config_files = {

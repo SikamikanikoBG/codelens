@@ -428,57 +428,110 @@ def _combine_fs_results(combined: dict, result: dict) -> None:
 
 def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResult:
     """Combine multiple analysis results into a single result."""
-    combined = {
-        'summary': {
-            'project_stats': {
-                'total_files': 0,
-                'total_sql_objects': 0,
-                'by_type': {},
-                'lines_of_code': 0,
-                'avg_file_size': 0
-            },
-            'code_metrics': {
-                'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
-                'classes': {'count': 0, 'with_docs': 0},
-                'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
-                'imports': {'count': 0, 'unique': set()}
-            },
-            'maintenance': {
-                'todos': [],
-                'comments_ratio': 0,
-                'doc_coverage': 0
-            },
-            'structure': {
-                'directories': set(),
-                'entry_points': [],
-                'core_files': [],
-                'sql_dependencies': []
-            }
-        },
-        'insights': [],
-        'files': {}
-    }
+    # Initialize with the first result to preserve its structure (including tree if present)
+    combined = None
 
-    for result in results:
-        # Handle SQL results
+    for i, result in enumerate(results):
         if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
+            if combined is None:
+                combined = {
+                    'summary': {
+                        'project_stats': {
+                            'total_files': 0,
+                            'total_sql_objects': 0,
+                            'by_type': {},
+                            'lines_of_code': 0,
+                            'avg_file_size': 0
+                        },
+                        'code_metrics': {
+                            'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
+                            'classes': {'count': 0, 'with_docs': 0},
+                            'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
+                            'imports': {'count': 0, 'unique': set()}
+                        },
+                        'maintenance': {
+                            'todos': [],
+                            'comments_ratio': 0,
+                            'doc_coverage': 0
+                        },
+                        'structure': {
+                            'directories': set(),
+                            'entry_points': [],
+                            'core_files': [],
+                            'sql_dependencies': []
+                        }
+                    },
+                    'insights': [],
+                    'files': {}
+                }
             _combine_sql_results(combined, result)
-        # Handle AnalysisResult objects
         elif isinstance(result, AnalysisResult):
-            # Convert AnalysisResult to a simple dict for easier processing
-            result_dict = {
-                'summary': result.summary,
-                'insights': result.insights,
-                'files': result.files
-            }
-            _combine_fs_results(combined, result_dict)
-        # Handle plain dictionaries
+            if combined is None:
+                # Initialize with the first AnalysisResult to preserve its structure
+                combined = {
+                    'summary': result.summary,
+                    'insights': result.insights,
+                    'files': result.files,
+                    'tree': getattr(result, 'tree', None)  # Preserve tree if present
+                }
+            else:
+                # Convert AnalysisResult to a simple dict for easier processing
+                result_dict = {
+                    'summary': result.summary,
+                    'insights': result.insights,
+                    'files': result.files,
+                    'tree': getattr(result, 'tree', None)  # Preserve tree if present
+                }
+                _combine_fs_results(combined, result_dict)
         else:
+            if combined is None:
+                combined = {
+                    'summary': {
+                        'project_stats': {
+                            'total_files': 0,
+                            'total_sql_objects': 0,
+                            'by_type': {},
+                            'lines_of_code': 0,
+                            'avg_file_size': 0
+                        },
+                        'code_metrics': {
+                            'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
+                            'classes': {'count': 0, 'with_docs': 0},
+                            'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
+                            'imports': {'count': 0, 'unique': set()}
+                        },
+                        'maintenance': {
+                            'todos': [],
+                            'comments_ratio': 0,
+                            'doc_coverage': 0
+                        },
+                        'structure': {
+                            'directories': set(),
+                            'entry_points': [],
+                            'core_files': [],
+                            'sql_dependencies': []
+                        }
+                    },
+                    'insights': [],
+                    'files': {}
+                }
             _combine_fs_results(combined, result)
 
+    if combined is None:
+        return AnalysisResult(**{
+            'summary': {
+                'project_stats': {'total_files': 0},
+                'code_metrics': {},
+                'maintenance': {},
+                'structure': {}
+            },
+            'insights': [],
+            'files': {}
+        })
+
     # Calculate final metrics
-    total_items = (combined['summary']['project_stats']['total_files'] +
-                  combined['summary']['project_stats']['total_sql_objects'])
+    total_items = (combined['summary']['project_stats'].get('total_files', 0) +
+                  combined['summary']['project_stats'].get('total_sql_objects', 0))
 
     if total_items > 0:
         combined['summary']['project_stats']['avg_file_size'] = (
@@ -486,13 +539,16 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
         )
 
     # Convert sets to lists for JSON serialization
-    combined['summary']['code_metrics']['imports']['unique'] = list(
-        combined['summary']['code_metrics']['imports']['unique']
-    )
-    combined['summary']['structure']['directories'] = list(
-        combined['summary']['structure']['directories']
-    )
+    if 'imports' in combined.get('code_metrics', {}):
+        combined['summary']['code_metrics']['imports']['unique'] = list(
+            combined['summary']['code_metrics']['imports'].get('unique', set())
+        )
+    if 'directories' in combined.get('structure', {}):
+        combined['summary']['structure']['directories'] = list(
+            combined['summary']['structure'].get('directories', set())
+        )
 
+    # Create AnalysisResult with preserved tree
     return AnalysisResult(**combined)
 
 def _combine_sql_results(combined: dict, sql_result: dict) -> None:

@@ -639,6 +639,19 @@ In my next message, I'll tell you about a new request or question about this cod
         # Prepare the complete message with files included
         full_message = system_prompt + "\n\n"
 
+        # Add system information
+        import platform
+        import sys
+        system_info = f"""# System Information
+
+**Operating System:** {platform.system()} {platform.release()} ({platform.version()})
+**Architecture:** {platform.machine()}
+**Python Version:** {sys.version}
+**Python Executable:** {sys.executable}
+
+"""
+        full_message += system_info
+
         # Add the analysis file
         analysis_file = output_path / 'analysis.txt'
         if analysis_file.exists():

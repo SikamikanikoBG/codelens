@@ -1,115 +1,103 @@
 """
-Gitignore file parser and pattern matcher.
-Handles .gitignore patterns and converts them to our ignore system.
+Gitignore Parser Utility Module
+Handles parsing and applying .gitignore patterns.
 """
 
-import fnmatch
-import os
 from pathlib import Path
-from typing import List, Set
+import re
+from typing import List, Optional
 
 class GitignoreParser:
-    """Parser for .gitignore files with pattern matching."""
-    
-    def __init__(self, project_root: Path):
-        self.project_root = Path(project_root).resolve()
+    """
+    Parses .gitignore files and provides methods to check if a file should be ignored.
+
+    Attributes:
+        root_path (Path): The root directory where the .gitignore file is located.
+        patterns (List[str]): List of ignore patterns parsed from .gitignore.
+    """
+
+    def __init__(self, root_path: Path):
+        """Initialize with the root path containing .gitignore."""
+        self.root_path = root_path
         self.patterns = []
-        self.negation_patterns = []
-        
-    def load_gitignore(self, gitignore_path: Path = None) -> None:
-        """Load patterns from .gitignore file."""
-        if gitignore_path is None:
-            gitignore_path = self.project_root / '.gitignore'
-        
+
+    def load_gitignore(self) -> None:
+        """
+        Load and parse the .gitignore file from the root directory.
+        This method populates the patterns list.
+        """
+        gitignore_path = self.root_path / '.gitignore'
+
         if not gitignore_path.exists():
             return
-        
+
         try:
-            with open(gitignore_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            for line in lines:
-                line = line.strip()
-                
-                # Skip empty lines and comments
-                if not line or line.startswith('#'):
-                    continue
-                
-                # Handle negation patterns (starting with !)
-                if line.startswith('!'):
-                    self.negation_patterns.append(line[1:])
-                else:
-                    self.patterns.append(line)
-                    
+            with open(gitignore_path, 'r') as f:
+                for line in f:
+                    # Skip empty lines and comments
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        self.patterns.append(line)
         except Exception as e:
-            print(f"Warning: Could not read .gitignore file: {e}")
-    
-    def should_ignore(self, file_path: Path) -> bool:
-        """Check if a file should be ignored based on .gitignore patterns."""
-        if not self.patterns:
-            return False
-        
-        # Get relative path from project root
-        try:
-            rel_path = file_path.relative_to(self.project_root)
-            path_str = str(rel_path).replace('\\', '/')  # Normalize path separators
-        except ValueError:
-            # File is outside project root
-            return False
-        
-        # Check if file should be ignored
-        ignored = False
-        
-        for pattern in self.patterns:
-            if self._match_pattern(path_str, pattern):
-                ignored = True
-                break
-        
-        # Check negation patterns (! patterns)
-        if ignored:
-            for pattern in self.negation_patterns:
-                if self._match_pattern(path_str, pattern):
-                    ignored = False
-                    break
-        
-        return ignored
-    
-    def _match_pattern(self, path: str, pattern: str) -> bool:
-        """Match a single gitignore pattern against a path."""
-        # Handle directory patterns (ending with /)
-        if pattern.endswith('/'):
-            pattern = pattern[:-1]
-            # Only match directories
-            if '/' not in path or not path.endswith('/'):
-                return False
-        
-        # Handle patterns starting with /
-        if pattern.startswith('/'):
-            pattern = pattern[1:]
-            # Match from root only
-            return fnmatch.fnmatch(path, pattern) or path.startswith(pattern + '/')
-        
-        # Handle patterns with intermediate directories
-        if '/' in pattern:
-            # Pattern contains directory separators
-            path_parts = path.split('/')
-            pattern_parts = pattern.split('/')
-            
-            # Try to match pattern at any position in path
-            for i in range(len(path_parts) - len(pattern_parts) + 1):
-                match = True
-                for j, pattern_part in enumerate(pattern_parts):
-                    if not fnmatch.fnmatch(path_parts[i + j], pattern_part):
-                        match = False
-                        break
-                if match:
-                    return True
-            return False
-        
-        # Simple filename pattern
-        filename = os.path.basename(path)
-        return fnmatch.fnmatch(filename, pattern) or fnmatch.fnmatch(path, pattern)
-    
+            print(f"Warning: Error reading {gitignore_path}: {e}")
+
     def get_ignore_patterns(self) -> List[str]:
-        """Get all ignore patterns as simple strings for compatibility."""
-        return self.patterns + [f"!{p}" for p in self.negation_patterns]
+        """
+        Get the list of ignore patterns.
+
+        Returns:
+            List[str]: List of ignore patterns.
+        """
+        return self.patterns
+
+    def should_ignore(self, path: Path) -> bool:
+        """
+        Check if a file or directory matches any of the .gitignore patterns.
+
+        Args:
+            path (Path): The file or directory to check.
+
+        Returns:
+            bool: True if the path should be ignored, False otherwise.
+        """
+        path_str = str(path.relative_to(self.root_path))
+
+        for pattern in self.patterns:
+            # Convert gitignore pattern to regex
+            regex_pattern = self._convert_to_regex(pattern)
+
+            # Check if the path matches the pattern
+            if re.search(regex_pattern, path_str):
+                return True
+
+        return False
+
+    def _convert_to_regex(self, pattern: str) -> str:
+        """
+        Convert a gitignore pattern to a regular expression.
+
+        Args:
+            pattern (str): The gitignore pattern.
+
+        Returns:
+            str: The equivalent regular expression.
+        """
+        # Escape special regex characters in the pattern
+        escaped_pattern = re.escape(pattern)
+
+        # Handle wildcards and special patterns
+        escaped_pattern = (
+            escaped_pattern.replace(r'\*', '.*')  # * -> .*
+            .replace(r'\?', '.')                  # ? -> .
+            .replace(r'\[', '[')                  # [ -> [
+            .replace(r'\]', ']')                  # ] -> ]
+        )
+
+        # Handle directory-specific patterns
+        if pattern.endswith('/'):
+            escaped_pattern += '/'
+        elif not pattern.startswith('/'):
+            # If the pattern doesn't start with a slash, it's relative to the current directory
+            escaped_pattern = f'.*{escaped_pattern}'
+
+        return escaped_pattern

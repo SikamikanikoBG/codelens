@@ -659,37 +659,33 @@ In my next message, I'll tell you about a new request or question about this cod
 @click.option('--exclude', '-e', multiple=True, help='Patterns to exclude (can be used multiple times)')
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
 @click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt, gemini, none)', default=None)
+@click.option('--respect-gitignore/--ignore-gitignore', default=True, help='Respect .gitignore file patterns (default: enabled)')  # NEW OPTION
 def main(path: str, output: str, format: str, full: bool, debug: bool,
          sql_server: str, sql_database: str, sql_config: str, exclude: tuple,
-         interactive: bool = True, open_in_llm: str = None):
+         interactive: bool = True, open_in_llm: str = None, respect_gitignore: bool = True):  # NEW PARAMETER
     """
-    Main entry point for the CLI.
-
-    The interactive menu is enabled by default and allows configuring all options
-    including file selection, output format, SQL settings, and more.
-
-    Args:
-        path: Path to analyze
-        output: Output directory
-        format: Output format (txt or json)
-        full: Export full file/object contents in separate files
-        debug: Enable debug output
-        sql_server: SQL Server connection string
-        sql_database: SQL Database to analyze
-        sql_config: Path to SQL configuration file
-        exclude: Patterns to exclude
-        interactive: Launch interactive selection menu (default: True)
+    Main entry point for the CLI with gitignore support.
     """
     try:
         # Convert to absolute paths
         path = Path(path).resolve()
         output_path = Path(output).resolve()
 
-        # Initialize include/exclude paths
-        include_paths = []
-        exclude_paths = []
+        # Parse gitignore if enabled
+        gitignore_patterns = []
+        if respect_gitignore:
+            from .utils.gitignore import GitignoreParser  # Import here to avoid circular imports
+            gitignore_parser = GitignoreParser(path)
+            gitignore_parser.load_gitignore()
+            gitignore_patterns = gitignore_parser.get_ignore_patterns()
 
-        # Prepare initial settings for the menu
+            if debug and gitignore_patterns:
+                console.print(f"[blue]Loaded {len(gitignore_patterns)} patterns from .gitignore[/]")
+
+        # Combine gitignore patterns with custom exclude patterns
+        all_ignore_patterns = list(exclude) + gitignore_patterns
+
+        # Update initial settings for menu
         initial_settings = {
             'format': format,
             'full': full,
@@ -697,8 +693,9 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             'sql_server': sql_server or '',
             'sql_database': sql_database or '',
             'sql_config': sql_config or '',
-            'exclude_patterns': list(exclude) if exclude else [],
-            'open_in_llm': open_in_llm or ''
+            'exclude_patterns': all_ignore_patterns,
+            'open_in_llm': open_in_llm or '',
+            'respect_gitignore': respect_gitignore  # NEW SETTING
         }
 
         # Launch interactive menu (default behavior)

@@ -92,7 +92,7 @@ class ProjectAnalyzer:
         return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
-        """Analyze entire project directory."""
+        """Analyze entire project directory with tree structure."""
         # Initialize analysis structure
         analysis = {
             'summary': {
@@ -164,6 +164,23 @@ class ProjectAnalyzer:
                 except Exception as e:
                     print(f"Error analyzing {file_path}: {e}")
                     continue
+
+        # Add tree structure generation
+        from ..utils.tree import ProjectTree
+
+        # Get excluded paths from analysis
+        excluded_paths = set()
+        if hasattr(self, '_excluded_paths'):
+            excluded_paths = self._excluded_paths
+
+        # Generate tree structure
+        tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
+        project_tree = tree_generator.generate_tree(path, excluded_paths)
+        summary_tree = tree_generator.generate_summary_tree(path, excluded_paths)
+
+        # Add to analysis structure
+        analysis['summary']['structure']['project_tree'] = project_tree
+        analysis['summary']['structure']['tree_summary'] = summary_tree
 
         # Calculate final metrics
         self._calculate_final_metrics(analysis)

@@ -80,7 +80,7 @@ class ProjectAnalyzer:
             '.ts': JavaScriptAnalyzer(),
             '.tsx': JavaScriptAnalyzer(),
         }
-        
+
         # Try to add SQL analyzer, but don't crash if it fails
         try:
             sql_analyzer = SQLServerAnalyzer()
@@ -88,11 +88,11 @@ class ProjectAnalyzer:
         except Exception as e:
             import warnings
             warnings.warn(f"SQL Server analyzer could not be initialized: {e}")
-        
+
         return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
-        """Analyze entire project directory."""
+        """Analyze entire project directory with tree structure."""
         # Initialize analysis structure
         analysis = {
             'summary': {
@@ -121,6 +121,10 @@ class ProjectAnalyzer:
             'insights': [],
             'files': {}
         }
+
+        # Add configuration analysis
+        config_analysis = self._analyze_project_configuration(path)
+        analysis['configuration'] = config_analysis
 
         # Collect analyzable files
         files = self._collect_files(path)
@@ -161,6 +165,23 @@ class ProjectAnalyzer:
                     print(f"Error analyzing {file_path}: {e}")
                     continue
 
+        # Add tree structure generation
+        from ..utils.tree import ProjectTree
+
+        # Get excluded paths from analysis
+        excluded_paths = set()
+        if hasattr(self, '_excluded_paths'):
+            excluded_paths = self._excluded_paths
+
+        # Generate tree structure
+        tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
+        project_tree = tree_generator.generate_tree(path, excluded_paths)
+        summary_tree = tree_generator.generate_summary_tree(path, excluded_paths)
+
+        # Add to analysis structure
+        analysis['summary']['structure']['project_tree'] = project_tree
+        analysis['summary']['structure']['tree_summary'] = summary_tree
+
         # Calculate final metrics
         self._calculate_final_metrics(analysis)
 
@@ -171,6 +192,80 @@ class ProjectAnalyzer:
             analysis['insights'] = self._generate_default_insights(analysis)
 
         return AnalysisResult(**analysis)
+
+    def _analyze_package_json(self, path: Path):
+        from .config import analyze_package_json
+        return analyze_package_json(path / 'package.json')
+
+    def _analyze_tsconfig(self, path: Path):
+        from .config import analyze_tsconfig
+        return analyze_tsconfig(path / 'tsconfig.json')
+
+    def _analyze_next_config(self, path: Path):
+        config_file = path / 'next.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'next.js config'}
+        return None
+
+    def _analyze_tailwind_config(self, path: Path):
+        config_file = path / 'tailwind.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'tailwind config'}
+        return None
+
+    def _analyze_pyproject_toml(self, path: Path):
+        config_file = path / 'pyproject.toml'
+        if config_file.exists():
+            try:
+                import tomli
+                with open(config_file, 'rb') as f:
+                    data = tomli.load(f)
+                return {'name': data.get('project', {}).get('name'), 'type': 'python project'}
+            except:
+                return {'error': 'Failed to parse pyproject.toml'}
+        return None
+
+    def _analyze_requirements(self, path: Path):
+        req_file = path / 'requirements.txt'
+        if req_file.exists():
+            try:
+                with open(req_file, 'r') as f:
+                    lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+                return {'dependencies': len(lines), 'type': 'python requirements'}
+            except:
+                return {'error': 'Failed to parse requirements.txt'}
+        return None
+
+    def _analyze_env_example(self, path: Path):
+        env_file = path / '.env.example'
+        if env_file.exists():
+            try:
+                with open(env_file, 'r') as f:
+                    lines = [line for line in f if '=' in line and not line.startswith('#')]
+                return {'env_vars': len(lines), 'type': 'environment template'}
+            except:
+                return {'error': 'Failed to parse .env.example'}
+        return None
+
+    def _extract_readme_summary(self, path: Path):
+        from .config import extract_readme_summary
+        return extract_readme_summary(path)
+
+    def _analyze_project_configuration(self, path: Path) -> dict:
+        """Analyze project configuration files for additional context."""
+        config_files = {
+            'package.json': self._analyze_package_json(path),
+            'tsconfig.json': self._analyze_tsconfig(path),
+            'next.config.js': self._analyze_next_config(path),
+            'tailwind.config.js': self._analyze_tailwind_config(path),
+            'pyproject.toml': self._analyze_pyproject_toml(path),
+            'requirements.txt': self._analyze_requirements(path),
+            '.env.example': self._analyze_env_example(path),
+            'README.md': self._extract_readme_summary(path)
+        }
+
+        # Filter out None values (files that don't exist)
+        return {k: v for k, v in config_files.items() if v is not None}
 
     def _collect_files(self, path: Path) -> List[Path]:
         """Collect all analyzable files from directory."""
@@ -300,3 +395,69 @@ class ProjectAnalyzer:
                 insights.append(f"Found {high_priority} high-priority TODOs")
 
         return insights
+
+    def _analyze_package_json(self, path: Path):
+        from .config import analyze_package_json
+        return analyze_package_json(path / 'package.json')
+
+    def _analyze_tsconfig(self, path: Path):
+        from .config import analyze_tsconfig
+        return analyze_tsconfig(path / 'tsconfig.json')
+
+    def _analyze_next_config(self, path: Path):
+        config_file = path / 'next.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'next.js config'}
+        return None
+
+    def _analyze_tailwind_config(self, path: Path):
+        for config_name in ['tailwind.config.js', 'tailwind.config.ts']:
+            config_file = path / config_name
+            if config_file.exists():
+                return {'exists': True, 'type': 'tailwind config', 'file': config_name}
+        return None
+
+    def _analyze_pyproject_toml(self, path: Path):
+        config_file = path / 'pyproject.toml'
+        if config_file.exists():
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Simple parsing - look for [project] section
+                    if '[project]' in content:
+                        lines = content.split('\n')
+                        for line in lines:
+                            if line.strip().startswith('name ='):
+                                name = line.split('=')[1].strip().strip('"\'')
+                                return {'name': name, 'type': 'python project'}
+                return {'exists': True, 'type': 'python project'}
+            except Exception:
+                return {'error': 'Failed to parse pyproject.toml'}
+        return None
+
+    def _analyze_requirements(self, path: Path):
+        req_file = path / 'requirements.txt'
+        if req_file.exists():
+            try:
+                with open(req_file, 'r') as f:
+                    lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+                return {'dependencies': len(lines), 'type': 'python requirements'}
+            except Exception:
+                return {'error': 'Failed to parse requirements.txt'}
+        return None
+
+    def _analyze_env_example(self, path: Path):
+        for env_name in ['.env.example', '.env.template', '.env.sample']:
+            env_file = path / env_name
+            if env_file.exists():
+                try:
+                    with open(env_file, 'r') as f:
+                        lines = [line for line in f if '=' in line and not line.startswith('#')]
+                    return {'env_vars': len(lines), 'type': 'environment template', 'file': env_name}
+                except Exception:
+                    return {'error': f'Failed to parse {env_name}'}
+        return None
+
+    def _extract_readme_summary(self, path: Path):
+        from .config import extract_readme_summary
+        return extract_readme_summary(path)

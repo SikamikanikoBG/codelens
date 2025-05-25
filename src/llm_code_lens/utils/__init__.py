@@ -1,20 +1,8 @@
-"""
-LLM Code Lens - Utility Functions
-Shared utility functions used across multiple modules.
-"""
-
-from typing import Dict, List, Set, Optional
+from .tree import ProjectTree
+from .gitignore import GitignoreParser
 
 def estimate_todo_priority(text: str) -> str:
-    """
-    Estimate TODO priority based on content.
-    
-    Args:
-        text: The text of the TODO comment
-        
-    Returns:
-        Priority level: 'high', 'medium', or 'low'
-    """
+    """Estimate TODO priority based on content."""
     text = text.lower()
     if any(word in text for word in ['urgent', 'critical', 'fixme', 'bug', 'memory leak', 'security']):
         return 'high'
@@ -23,16 +11,7 @@ def estimate_todo_priority(text: str) -> str:
     return 'low'
 
 def is_potential_entry_point(file_path: str, analysis: dict) -> bool:
-    """
-    Identify if a file is a potential entry point.
-    
-    Args:
-        file_path: Path to the file
-        analysis: Analysis data for the file
-        
-    Returns:
-        bool: True if the file is likely an entry point
-    """
+    """Identify if a file is a potential entry point."""
     from pathlib import Path
     
     filename = Path(file_path).name
@@ -47,15 +26,7 @@ def is_potential_entry_point(file_path: str, analysis: dict) -> bool:
     return False
 
 def is_core_file(analysis: dict) -> bool:
-    """
-    Identify if a file is likely a core component.
-    
-    Args:
-        analysis: Analysis data for the file
-        
-    Returns:
-        bool: True if the file is likely a core component
-    """
+    """Identify if a file is likely a core component."""
     # Check function count
     if len(analysis.get('functions', [])) > 5:
         return True
@@ -77,3 +48,5 @@ def is_core_file(analysis: dict) -> bool:
         return True
     
     return False
+
+__all__ = ['ProjectTree', 'GitignoreParser', 'estimate_todo_priority', 'is_potential_entry_point', 'is_core_file']

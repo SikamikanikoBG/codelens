@@ -44,80 +44,79 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
     """Determine if a file or directory should be ignored based on patterns."""
     if ignore_patterns is None:
         ignore_patterns = []
-        
+
     path_str = str(path)
 
     default_ignores = {
         # Version control and cache directories
         '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
         '.vscode-test', '.nyc_output', '.ipynb_checkpoints', '.tox',
-        
+
         # Language/framework specific directories
         'node_modules', 'venv', 'env', 'dist', 'build', 'htmlcov',
-        '.next', 'next-env.d.ts', 'bin', 'obj', 'DerivedData', 
+        '.next', 'next-env.d.ts', 'bin', 'obj', 'DerivedData',
         'vendor', '.bundle', 'target', 'blib', 'pm_to_blib',
         '.dart_tool', 'pkg', 'out', 'coverage',
-        
+
         # Package lock files
         'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
         'Gemfile.lock', 'composer.lock', 'composer.json',
-        
+
         # Config files
         'tsconfig.json', 'jsconfig.json',
-        
+
         # System files
         '.DS_Store',
-        
+
         # Log files
         '*.log', 'npm-debug.log', 'yarn-error.log',
-        
+
         # Temp/backup files
         '*.tmp', '*.bak', '*.swp', '*.swo', '*.orig',
-        
+
         # Binary and compiled files
         '*.exe', '*.dll', '*.so', '*.dylib', '*.a', '*.o', '*.obj',
         '*.pdb', '*.idb', '*.ilk', '*.map', '*.ncb', '*.sdf', '*.opensdf',
         '*.lib', '*.class', '*.jar', '*.war', '*.ear', '*.pyc', '*.pyo', '*.pyd',
         '*.py[cod]', '*$py.class', '*.whl', '*.mexw64', '*.test', '*.out',
         '*.rs.bk', '*.build',
-        
+
         # Document build files
         '*.aux', '*.toc', '*.out', '*.dvi', '*.ps', '*.pdf', '*.lof', '*.lot',
         '*.fls', '*.fdb_latexmk', '*.synctex.gz',
-        
+
         # Source files that shouldn't normally be ignored
         '*.go',
-        
+
         # Project files
         '*.csproj', '*.user', '*.suo', '*.sln.docstates', '*.xcodeproj', '*.xcworkspace',
-        
+
         # CSS files
         '*.css.map', '*.min.css',
-        
+
         # R files
         '.Rhistory', '.RData', '*.Rout',
-        
+
         # Utility files
         'pnp.loader.mjs'
     }
 
-    
     # Check if the path is a directory and should be ignored
     if path.is_dir():
         for pattern in default_ignores:
             if pattern in path.name or any(pattern in part for part in path.parts):
                 return True
-    
+
     # Check default ignores
     for pattern in default_ignores:
         if pattern in path_str or any(pattern in part for part in path.parts):
             return True
-    
+
     # Check custom ignore patterns
     for pattern in ignore_patterns:
         if pattern in path_str or any(pattern in part for part in path.parts):
             return True
-            
+
     return False
 
 def is_binary(file_path: Path) -> bool:
@@ -135,40 +134,40 @@ def split_content_by_tokens(content: str, chunk_size: int = 100000) -> List[str]
     """
     Split content into chunks based on token count.
     Handles large content safely by pre-chunking before tokenization.
-    
+
     Args:
         content (str): The content to split
         chunk_size (int): Target size for each chunk in tokens
-        
+
     Returns:
         List[str]: List of content chunks
     """
     if not content:
         return ['']
-        
+
     try:
         # First do a rough pre-chunking by characters to avoid stack overflow
         MAX_CHUNK_CHARS = 100000  # Adjust this based on your needs
         rough_chunks = []
-        
+
         for i in range(0, len(content), MAX_CHUNK_CHARS):
             rough_chunks.append(content[i:i + MAX_CHUNK_CHARS])
-            
+
         encoder = tiktoken.get_encoding("cl100k_base")
         final_chunks = []
-        
+
         # Process each rough chunk
         for rough_chunk in rough_chunks:
             tokens = encoder.encode(rough_chunk)
-            
+
             # Split into smaller chunks based on token count
             for i in range(0, len(tokens), chunk_size):
                 chunk_tokens = tokens[i:i + chunk_size]
                 chunk_content = encoder.decode(chunk_tokens)
                 final_chunks.append(chunk_content)
-                
+
         return final_chunks
-        
+
     except Exception as e:
         # Fallback to line-based splitting
         return _split_by_lines(content, max_chunk_size=chunk_size)
@@ -178,12 +177,12 @@ def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
     # Handle empty content case first
     if not content:
         return [""]
-        
+
     lines = content.splitlines(keepends=True)  # Keep line endings
     chunks = []
     current_chunk = []
     current_size = 0
-    
+
     for line in lines:
         line_size = len(line.encode('utf-8'))
         if current_size + line_size > max_chunk_size and current_chunk:
@@ -193,14 +192,14 @@ def _split_by_lines(content: str, max_chunk_size: int = 100000) -> List[str]:
         else:
             current_chunk.append(line)
             current_size += line_size
-    
+
     if current_chunk:
         chunks.append(''.join(current_chunk))
-        
+
     # Handle special case where we got no chunks
     if not chunks:
         return [content]  # Return entire content as one chunk
-        
+
     return chunks
 
 def delete_and_create_output_dir(output_dir: Path) -> None:
@@ -215,13 +214,13 @@ def delete_and_create_output_dir(output_dir: Path) -> None:
                     menu_state_data = f.read()
             except Exception:
                 pass
-                
+
         # Delete the directory
         shutil.rmtree(output_dir)
-        
+
         # Recreate the directory
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Restore the menu state file if we had one
         if menu_state_data:
             try:
@@ -232,33 +231,44 @@ def delete_and_create_output_dir(output_dir: Path) -> None:
     else:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None) -> None:
-    """Export full content of all files in separate token-limited files."""
+def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None, include_samples: bool = True) -> None:
+    """Export full content of all files with optional sample snippets."""
     file_content = []
     exclude_paths = exclude_paths or []
+
+    # Add configuration summary at the top
+    config_summary = _generate_config_summary(path)
+    if config_summary:
+        file_content.append(f"\nPROJECT CONFIGURATION:\n{'='*80}\n{config_summary}\n")
 
     # Export file system content
     for file_path in path.rglob('*'):
         # Skip if file should be ignored based on patterns
         if should_ignore(file_path, ignore_patterns) or is_binary(file_path):
             continue
-            
+
         # Skip if file is in excluded paths from interactive selection
         should_exclude = False
         for exclude_path in exclude_paths:
             if str(file_path).startswith(str(exclude_path)):
                 should_exclude = True
                 break
-                
+
         if should_exclude:
             continue
-            
+
         try:
             content = file_path.read_text(encoding='utf-8')
             file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
         except Exception as e:
             console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
             continue
+
+    # Add sample content from representative files
+    if include_samples:
+        sample_content = _extract_sample_content(path, ignore_patterns, exclude_paths)
+        if sample_content:
+            file_content.append(f"\nSAMPLE CODE SNIPPETS:\n{'='*80}\n{sample_content}\n")
 
     # Combine all content
     full_content = "\n".join(file_content)
@@ -272,6 +282,57 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
             console.print(f"[green]Created full content file: {output_file}[/]")
         except Exception as e:
             console.print(f"[yellow]Warning: Error writing {output_file}: {str(e)}[/]")
+
+def _generate_config_summary(path: Path) -> str:
+    """Generate a summary of project configuration."""
+    from .analyzer.config import analyze_package_json, analyze_tsconfig, extract_readme_summary
+
+    summary_parts = []
+
+    # Package.json summary
+    pkg_info = analyze_package_json(path / 'package.json')
+    if pkg_info and 'error' not in pkg_info:
+        summary_parts.append(f"Project: {pkg_info.get('name', 'Unknown')} v{pkg_info.get('version', '0.0.0')}")
+        if pkg_info.get('description'):
+            summary_parts.append(f"Description: {pkg_info['description']}")
+        if pkg_info.get('framework_indicators'):
+            summary_parts.append(f"Frameworks: {', '.join(pkg_info['framework_indicators'])}")
+        if pkg_info.get('scripts'):
+            summary_parts.append(f"Available scripts: {', '.join(pkg_info['scripts'])}")
+
+    # README summary
+    readme_info = extract_readme_summary(path)
+    if readme_info:
+        summary_parts.append(f"README Summary:\n{readme_info['summary']}")
+
+    return '\n'.join(summary_parts)
+
+def _extract_sample_content(path: Path, ignore_patterns: List[str], exclude_paths: List[Path]) -> str:
+    """Extract small samples from different file types."""
+    samples = []
+    sample_files = {}
+
+    # Collect representative files
+    for file_path in path.rglob('*'):
+        if should_ignore(file_path, ignore_patterns) or is_binary(file_path):
+            continue
+
+        ext = file_path.suffix.lower()
+        if ext in ['.js', '.jsx', '.ts', '.tsx', '.py', '.css', '.scss']:
+            if ext not in sample_files or len(str(file_path)) < len(str(sample_files[ext])):
+                sample_files[ext] = file_path
+
+    # Extract samples
+    for ext, file_path in sample_files.items():
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()[:20]  # First 20 lines
+                content = ''.join(lines)
+                samples.append(f"Sample {ext} ({file_path.name}):\n{content}\n")
+        except Exception:
+            continue
+
+    return '\n'.join(samples)
 
 def export_sql_content(sql_results: dict, output_dir: Path) -> None:
     """Export full content of SQL objects in separate token-limited files."""
@@ -342,7 +403,7 @@ def _combine_fs_results(combined: dict, result: dict) -> None:
     # Update maintenance info
     maintenance = result.get('summary', {}).get('maintenance', {})
     combined['summary']['maintenance']['todos'].extend(maintenance.get('todos', []))
-    
+
     # Update structure info
     structure = result.get('summary', {}).get('structure', {})
     if 'directories' in structure:
@@ -425,20 +486,19 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
 
     return AnalysisResult(**combined)
 
-
 def _combine_sql_results(combined: dict, sql_result: dict) -> None:
     """Combine SQL results with proper object counting."""
     # Count objects
     proc_count = len(sql_result.get('stored_procedures', []))
     view_count = len(sql_result.get('views', []))
     func_count = len(sql_result.get('functions', []))
-    
+
     # Update stats
     combined['summary']['project_stats']['total_sql_objects'] += proc_count + view_count + func_count
     combined['summary']['code_metrics']['sql_objects']['procedures'] += proc_count
     combined['summary']['code_metrics']['sql_objects']['views'] += view_count
     combined['summary']['code_metrics']['sql_objects']['functions'] += func_count
-    
+
     # Add objects to files
     for proc in sql_result.get('stored_procedures', []):
         key = f"stored_proc_{proc['name']}"
@@ -450,16 +510,15 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
         key = f"function_{func['name']}"
         combined['files'][key] = func
 
-
 def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) -> bool:
     """
     Open the analysis results in a browser with the specified LLM provider.
-    
+
     Args:
         provider: The LLM provider to use (claude, chatgpt, gemini, none, etc.)
         output_path: Path to the output directory containing analysis files
         debug: Enable debug output
-        
+
     Returns:
         bool: True if successful, False otherwise
     """
@@ -467,7 +526,7 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
     if provider and provider.lower() == 'none':
         console.print("[green]Skipping browser opening as requested.[/]")
         return True
-        
+
     try:
         # Import pyperclip for clipboard operations
         try:
@@ -477,9 +536,9 @@ def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) 
             console.print("[yellow]Error: The pyperclip package is required for LLM integration.[/]")
             console.print("[yellow]Please install it with: pip install pyperclip[/]")
             return False
-        
+
         # Define the system prompt
-        system_prompt = """You are an experienced developer and software architect. 
+        system_prompt = """You are an experienced developer and software architect.
 I'm sharing a codebase (or summary of a codebase) with you.
 
 Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
@@ -490,106 +549,103 @@ Your instructions should specify exactly what needs to be done in which file and
 
 In my next message, I'll tell you about a new request or question about this code.
 """
-        
+
         # Prepare the complete message with files included
         full_message = system_prompt + "\n\n"
-        
+
         # Add the analysis file
         analysis_file = output_path / 'analysis.txt'
         if analysis_file.exists():
             full_message += f"# Code Analysis\n\n```\n{analysis_file.read_text(encoding='utf-8')}\n```\n\n"
-        
+
         # Check if full export is enabled by looking for full_*.txt files
         full_files = list(output_path.glob('full_*.txt'))
-        
+
         # If full export is enabled, add the content of all full files
         if full_files:
             for file in sorted(full_files):
                 full_message += f"# {file.name}\n\n```\n{file.read_text(encoding='utf-8')}\n```\n\n"
-            
+
             # Add SQL content files if they exist
             sql_files = list(output_path.glob('sql_full_*.txt'))
             for file in sorted(sql_files):
                 full_message += f"# {file.name}\n\n```sql\n{file.read_text(encoding='utf-8')}\n```\n\n"
-        
+
         # Copy the full message to clipboard (for all providers as backup)
         pyperclip.copy(full_message)
-        
+
         # Open the appropriate provider
         if provider.lower() == 'claude':
             # Open Claude in a new chat
             webbrowser.open("https://claude.ai/new")
-            
+
             console.print("[green]Claude opened in browser.[/]")
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
             console.print("[green]Just press Ctrl+V in Claude to paste everything at once![/]")
             return True
-                
+
         elif provider.lower() == 'chatgpt':
             # For ChatGPT, try to use the query parameter approach
             try:
                 # Encode the message for URL
                 encoded_message = urllib.parse.quote(full_message)
-                
+
                 # Check if the URL would be too long (most browsers have limits around 2000-8000 chars)
                 # We'll use a conservative limit of 2000 characters
                 if len(encoded_message) <= 2000:
                     # Use the query parameter approach
                     chatgpt_url = f"https://chatgpt.com/?q={encoded_message}"
                     webbrowser.open(chatgpt_url)
-                    
+
                     console.print("[green]ChatGPT opened in browser with content pre-loaded.[/]")
                     console.print("[green]The content has also been copied to your clipboard as a backup.[/]")
                     console.print("[green]If the content doesn't appear automatically, press Ctrl+V to paste it.[/]")
                 else:
                     # Fallback to regular URL if content is too large
                     webbrowser.open("https://chat.openai.com/")
-                    
+
                     console.print("[green]ChatGPT opened in browser.[/]")
                     console.print("[green]The content is too large for URL parameters (browser limitations).[/]")
                     console.print("[green]The complete analysis has been copied to your clipboard.[/]")
                     console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
-                
+
                 if debug:
                     console.print(f"[blue]URL parameter length: {len(encoded_message)} characters[/]")
                     if len(encoded_message) > 2000:
                         console.print("[blue]URL parameter too long, using clipboard only[/]")
-                
+
                 return True
             except Exception as e:
                 # Fallback to regular approach if URL encoding fails
                 if debug:
                     console.print(f"[yellow]Error with URL parameter approach: {str(e)}[/]")
                     console.print("[yellow]Falling back to clipboard approach[/]")
-                
+
                 webbrowser.open("https://chat.openai.com/")
-                
+
                 console.print("[green]ChatGPT opened in browser.[/]")
                 console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
                 console.print("[green]Just press Ctrl+V in ChatGPT to paste everything at once![/]")
                 return True
-            
+
         elif provider.lower() == 'gemini':
             # Open Gemini
             webbrowser.open("https://gemini.google.com/")
-            
+
             console.print("[green]Gemini opened in browser.[/]")
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
             console.print("[green]Just press Ctrl+V in Gemini to paste everything at once![/]")
             return True
-                
+
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
             return False
-            
+
     except Exception as e:
         console.print(f"[red]Error opening in LLM: {str(e)}[/]")
         if debug:
             console.print(traceback.format_exc())
         return False
-
-
-
 
 @click.command()
 @click.argument('path', type=click.Path(exists=True), default='.')
@@ -604,14 +660,14 @@ In my next message, I'll tell you about a new request or question about this cod
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
 @click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt, gemini, none)', default=None)
 def main(path: str, output: str, format: str, full: bool, debug: bool,
-         sql_server: str, sql_database: str, sql_config: str, exclude: tuple, 
+         sql_server: str, sql_database: str, sql_config: str, exclude: tuple,
          interactive: bool = True, open_in_llm: str = None):
     """
     Main entry point for the CLI.
-    
+
     The interactive menu is enabled by default and allows configuring all options
     including file selection, output format, SQL settings, and more.
-    
+
     Args:
         path: Path to analyze
         output: Output directory
@@ -628,7 +684,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Convert to absolute paths
         path = Path(path).resolve()
         output_path = Path(output).resolve()
-        
+
         # Initialize include/exclude paths
         include_paths = []
         exclude_paths = []
@@ -644,24 +700,24 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             'exclude_patterns': list(exclude) if exclude else [],
             'open_in_llm': open_in_llm or ''
         }
-        
+
         # Launch interactive menu (default behavior)
         try:
             # Import here to avoid circular imports
             from .menu import run_menu
             console.print("[bold blue]🖥️ Launching interactive file selection menu...[/]")
             settings = run_menu(Path(path), initial_settings)
-            
+
             # Check if user cancelled
             if settings.get('cancelled', False):
                 console.print("[yellow]Operation cancelled by user[/]")
                 return 0
-            
+
             # Update paths based on user selection
             path = settings.get('path', path)
             include_paths = settings.get('include_paths', [])
             exclude_paths = settings.get('exclude_paths', [])
-            
+
             # Update other settings from menu
             format = settings.get('format', format)
             full = settings.get('full', full)
@@ -671,7 +727,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             sql_config = settings.get('sql_config', sql_config)
             exclude = settings.get('exclude', exclude)
             open_in_llm = settings.get('open_in_llm', open_in_llm)
-            
+
             if debug:
                 console.print(f"[blue]Selected path: {path}[/]")
                 console.print(f"[blue]Included paths: {len(include_paths)}[/]")
@@ -723,7 +779,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             try:
                 from .analyzer import SQLServerAnalyzer
                 analyzer = SQLServerAnalyzer()
-                
+
                 try:
                     analyzer.connect(sql_server)  # Will use env vars if not provided
                     if sql_database:
@@ -750,7 +806,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                     if debug:
                         console.print(traceback.format_exc())
                     console.print("[yellow]SQL analysis will be skipped, but file analysis will continue.[/]")
-                    
+
             except Exception as e:
                 console.print(f"[yellow]SQL Server analysis is not available: {str(e)}[/]")
                 console.print("[yellow]Install pyodbc and required ODBC drivers to enable this feature.[/]")
@@ -758,11 +814,11 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         # Check for newer version (non-blocking)
         check_for_newer_version()
-        
+
         # Run file system analysis
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
         analyzer = ProjectAnalyzer()
-        
+
         # Pass include/exclude paths to analyzer if they were set in interactive mode
         if interactive and (include_paths or exclude_paths):
             # Create a custom file collection function that respects include/exclude paths
@@ -770,19 +826,19 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                 # Get all files that match the analyzer's supported extensions
                 files = []
                 for file_path in path.rglob('*'):
-                    if (file_path.is_file() and 
+                    if (file_path.is_file() and
                         file_path.suffix.lower() in analyzer.analyzers):
                         files.append(file_path)
-                
+
                 # Apply include/exclude filters
                 filtered_files = []
                 excluded_files = []
-                
+
                 for file_path in files:
                     # Check if file should be included based on interactive selection
                     should_include = True
                     exclusion_reason = None
-                    
+
                     # If we have explicit include paths, file must be in one of them
                     if include_paths:
                         should_include = False
@@ -792,26 +848,26 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                                 break
                         if not should_include:
                             exclusion_reason = "Not in include paths"
-                    
+
                     # Check if file is in exclude paths
                     for exclude_path in exclude_paths:
                         if str(file_path).startswith(str(exclude_path)):
                             should_include = False
                             exclusion_reason = f"Excluded by path: {exclude_path}"
                             break
-                    
+
                     if should_include:
                         filtered_files.append(file_path)
                     else:
                         excluded_files.append((str(file_path), exclusion_reason))
-                
+
                 # Log verification information if debug mode is enabled
                 if debug:
                     console.print(f"[blue]File collection verification:[/]")
                     console.print(f"[blue]- Total files found: {len(files)}[/]")
                     console.print(f"[blue]- Files included: {len(filtered_files)}[/]")
                     console.print(f"[blue]- Files excluded: {len(excluded_files)}[/]")
-                    
+
                     # Log a sample of excluded files (up to 5) with reasons
                     if excluded_files and len(excluded_files) > 0:
                         console.print("[blue]Sample of excluded files:[/]")
@@ -819,15 +875,15 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                             console.print(f"[blue]  {i+1}. {file} - {reason}[/]")
                         if len(excluded_files) > 5:
                             console.print(f"[blue]  ... and {len(excluded_files) - 5} more[/]")
-                
+
                 return filtered_files
-            
+
             # Replace the method
             analyzer._collect_files = custom_collect_files
-            
+
             if debug:
                 console.print(f"[blue]Using custom file collection with filters[/]")
-        
+
         fs_results = analyzer.analyze(path)
         results.append(fs_results)
 
@@ -842,7 +898,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         try:
             # Ensure output directory exists
             output_path.mkdir(parents=True, exist_ok=True)
-            
+
             content = combined_results.to_json() if format == 'json' else combined_results.to_text()
             result_file.write_text(content, encoding='utf-8')
         except Exception as e:

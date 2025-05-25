@@ -241,7 +241,7 @@ def delete_and_create_output_dir(output_dir: Path) -> None:
     else:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None, include_samples: bool = True) -> None:
+def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None, include_samples: bool = True, progress=None, task_id=None) -> None:
     """Export full content of all files with optional sample snippets."""
     file_content = []
     exclude_paths = exclude_paths or []
@@ -252,6 +252,7 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
         file_content.append(f"\nPROJECT CONFIGURATION:\n{'='*80}\n{config_summary}\n")
 
     # Export file system content
+    processed_files = 0
     for file_path in path.rglob('*'):
         # Skip if file should be ignored based on patterns
         if should_ignore(file_path, ignore_patterns) or is_binary(file_path):
@@ -270,12 +271,12 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
         try:
             content = file_path.read_text(encoding='utf-8')
             file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
-
+            
             # Update progress
             processed_files += 1
             if progress and task_id:
                 progress.update(task_id, advance=1, description=f"Exporting: {file_path.name}")
-
+                
         except Exception as e:
             console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
             continue
@@ -884,8 +885,9 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Check for newer version (non-blocking)
         check_for_newer_version()
 
-        # Run file system analysis
+        # Run file system analysis with progress
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
+        
         analyzer = ProjectAnalyzer()
 
         # Pass include/exclude paths to analyzer if they were set in interactive mode
@@ -953,7 +955,23 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             if debug:
                 console.print(f"[blue]Using custom file collection with filters[/]")
 
-        fs_results = analyzer.analyze(path)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            # Pass progress to analyzer for file-by-file updates
+            analyzer.progress = progress
+            
+            # Create main analysis task
+            analysis_task = progress.add_task("Analyzing project files...", total=None)
+            
+            fs_results = analyzer.analyze(path)
+            progress.update(analysis_task, completed=100, total=100)
+
         results.append(fs_results)
 
         # Combine results
@@ -976,17 +994,33 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         console.print(f"[bold green]✨ Analysis saved to {result_file}[/]")
 
-        # Handle full content export
+        # Handle full content export with progress
         if full:
             console.print("[bold blue]📦 Exporting full contents...[/]")
-            try:
-                ignore_patterns = parse_ignore_file(Path('.llmclignore')) + list(exclude)
-                export_full_content(path, output_path, ignore_patterns, exclude_paths)
-                console.print("[bold green]✨ Full content export complete![/]")
-            except Exception as e:
-                console.print(f"[yellow]Warning during full export: {str(e)}[/]")
-                if debug:
-                    console.print(traceback.format_exc())
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                console=console
+            ) as progress:
+                try:
+                    ignore_patterns = parse_ignore_file(Path('.llmclignore')) + list(exclude)
+                    
+                    # Count total files for progress
+                    all_files = list(path.rglob('*'))
+                    total_files = len([f for f in all_files if f.is_file() and not should_ignore(f, ignore_patterns) and not is_binary(f)])
+                    
+                    export_task = progress.add_task("Exporting file contents...", total=total_files)
+                    
+                    export_full_content(path, output_path, ignore_patterns, exclude_paths, True, progress, export_task)
+                    console.print("[bold green]✨ Full content export complete![/]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning during full export: {str(e)}[/]")
+                    if debug:
+                        console.print(traceback.format_exc())
 
         # Open in LLM if requested and not 'none'
         if open_in_llm and open_in_llm.lower() != 'none':

@@ -59,7 +59,7 @@ This launches the interactive interface where you can navigate your project, sel
 3. **Run analysis**: CodeLens examines your code and generates insights
 4. **Send to LLM**: With one click, send everything to your preferred AI assistant
 
-### LLM Integration (New in v0.5.0!)
+### LLM Integration (Enhanced in v0.5.15!)
 
 CodeLens now integrates directly with popular LLM providers:
 
@@ -80,10 +80,22 @@ When analysis completes, CodeLens:
 
 Just paste and start asking questions about your code!
 
+#### New in v0.5.15: Enhanced AI Workflow
+CodeLens now provides an optimized workflow for AI code assistance:
+
+1. **System Context**: Automatically includes your OS, Python version, and architecture
+2. **Smart Editing**: AI will ask for current files before suggesting changes (ensuring 100% accuracy)
+3. **Effortless Updates**: All suggestions use search-and-replace format for quick implementation
+4. **Progress Tracking**: Real-time progress bars show exactly what's happening during analysis
+
+The enhanced system prompt ensures AI assistants provide more accurate, contextual suggestions that work perfectly with your specific development environment.
+
 ### Interactive Interface
 
 The intuitive terminal interface lets you:
+- **See real-time progress** with detailed progress bars and file-by-file indicators
 - Navigate with arrow keys (↑↓←→)
+- **Watch progress in real-time** with animated progress bars and current file indicators
 - Select files and directories with Space (includes all sub-elements)
 - Switch sections with Tab
 - Configure options with function keys (F1-F6)
@@ -122,8 +134,10 @@ CodeLens generates a comprehensive analysis in the `.codelens` directory:
 
 ### 1. Project Overview
 - Total files, lines of code, and complexity metrics
+- **Visual project tree structure** showing your codebase hierarchy
 - Language distribution and project structure
 - Entry points and core files identification
+- **System environment context** (OS, Python version, architecture)
 
 ### 2. Smart Insights
 - Architectural patterns detected

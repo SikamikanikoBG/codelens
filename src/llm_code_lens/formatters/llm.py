@@ -19,14 +19,12 @@ def format_analysis(result: AnalysisResult) -> str:
         "",
     ])
 
-    # NEW: Project Tree Structure
+    # Project Tree Structure
     if 'project_tree' in result.summary.get('structure', {}):
         sections.extend([
             "PROJECT STRUCTURE:",
+            "=" * 80,
             result.summary['structure']['project_tree'],
-            "",
-            "STRUCTURE SUMMARY:",
-            result.summary['structure']['tree_summary'],
             "",
         ])
 

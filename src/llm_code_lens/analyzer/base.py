@@ -10,6 +10,7 @@ class AnalysisResult:
     insights: List[str]
     files: Dict[str, dict]
     configuration: Optional[dict] = None
+    tree: Optional[str] = None
 
     def to_text(self) -> str:
         """Convert analysis to LLM-friendly text format."""
@@ -134,10 +135,18 @@ class ProjectAnalyzer:
         files = self._collect_files(path)
         analysis['summary']['project_stats']['total_files'] = len(files)
 
-        # Process each file
-        for file_path in files:
+        # Process each file with progress updates
+        total_files = len(files)
+        if hasattr(self, 'progress'):
+            file_task = self.progress.add_task("Processing files...", total=total_files)
+
+        for i, file_path in enumerate(files):
             if analyzer := self.analyzers.get(file_path.suffix.lower()):
                 try:
+                    # Update progress
+                    if hasattr(self, 'progress'):
+                        self.progress.update(file_task, advance=1, description=f"Analyzing: {file_path.name}")
+
                     file_analysis = analyzer.analyze_file(file_path)
                     str_path = str(file_path)
 
@@ -169,7 +178,10 @@ class ProjectAnalyzer:
                     print(f"Error analyzing {file_path}: {e}")
                     continue
 
-        # Add tree structure generation
+        # Add tree structure generation with progress
+        if hasattr(self, 'progress'):
+            tree_task = self.progress.add_task("Generating project tree...", total=2)
+
         from ..utils.tree import ProjectTree
 
         # Get excluded paths from analysis
@@ -180,11 +192,19 @@ class ProjectAnalyzer:
         # Generate tree structure
         tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
         project_tree = tree_generator.generate_tree(path, excluded_paths)
+
+        if hasattr(self, 'progress'):
+            self.progress.update(tree_task, advance=1)
+
         summary_tree = tree_generator.generate_summary_tree(path, excluded_paths)
+
+        if hasattr(self, 'progress'):
+            self.progress.update(tree_task, advance=1)
 
         # Add to analysis structure
         analysis['summary']['structure']['project_tree'] = project_tree
         analysis['summary']['structure']['tree_summary'] = summary_tree
+
 
         # Calculate final metrics
         self._calculate_final_metrics(analysis)

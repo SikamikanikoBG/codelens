@@ -8,6 +8,7 @@ import click
 from pathlib import Path
 from typing import Dict, List, Union, Optional
 from rich.console import Console
+from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from .analyzer.base import ProjectAnalyzer, AnalysisResult
 from .analyzer.sql import SQLServerAnalyzer
 from .version import check_for_newer_version
@@ -240,7 +241,7 @@ def delete_and_create_output_dir(output_dir: Path) -> None:
     else:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None, include_samples: bool = True) -> None:
+def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str], exclude_paths: List[Path] = None, include_samples: bool = True, progress=None, task_id=None) -> None:
     """Export full content of all files with optional sample snippets."""
     file_content = []
     exclude_paths = exclude_paths or []
@@ -251,6 +252,7 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
         file_content.append(f"\nPROJECT CONFIGURATION:\n{'='*80}\n{config_summary}\n")
 
     # Export file system content
+    processed_files = 0
     for file_path in path.rglob('*'):
         # Skip if file should be ignored based on patterns
         if should_ignore(file_path, ignore_patterns) or is_binary(file_path):
@@ -269,6 +271,12 @@ def export_full_content(path: Path, output_dir: Path, ignore_patterns: List[str]
         try:
             content = file_path.read_text(encoding='utf-8')
             file_content.append(f"\nFILE: {file_path}\n{'='*80}\n{content}\n")
+            
+            # Update progress
+            processed_files += 1
+            if progress and task_id:
+                progress.update(task_id, advance=1, description=f"Exporting: {file_path.name}")
+                
         except Exception as e:
             console.print(f"[yellow]Warning: Error reading {file_path}: {str(e)}[/]")
             continue
@@ -428,57 +436,108 @@ def _combine_fs_results(combined: dict, result: dict) -> None:
 
 def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResult:
     """Combine multiple analysis results into a single result."""
-    combined = {
-        'summary': {
-            'project_stats': {
-                'total_files': 0,
-                'total_sql_objects': 0,
-                'by_type': {},
-                'lines_of_code': 0,
-                'avg_file_size': 0
-            },
-            'code_metrics': {
-                'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
-                'classes': {'count': 0, 'with_docs': 0},
-                'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
-                'imports': {'count': 0, 'unique': set()}
-            },
-            'maintenance': {
-                'todos': [],
-                'comments_ratio': 0,
-                'doc_coverage': 0
-            },
-            'structure': {
-                'directories': set(),
-                'entry_points': [],
-                'core_files': [],
-                'sql_dependencies': []
-            }
-        },
-        'insights': [],
-        'files': {}
-    }
+    # Initialize with the first result to preserve its structure (including tree if present)
+    combined = None
 
-    for result in results:
-        # Handle SQL results
+    for i, result in enumerate(results):
         if isinstance(result, dict) and ('stored_procedures' in result or 'views' in result):
+            if combined is None:
+                combined = {
+                    'summary': {
+                        'project_stats': {
+                            'total_files': 0,
+                            'total_sql_objects': 0,
+                            'by_type': {},
+                            'lines_of_code': 0,
+                            'avg_file_size': 0
+                        },
+                        'code_metrics': {
+                            'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
+                            'classes': {'count': 0, 'with_docs': 0},
+                            'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
+                            'imports': {'count': 0, 'unique': set()}
+                        },
+                        'maintenance': {
+                            'todos': [],
+                            'comments_ratio': 0,
+                            'doc_coverage': 0
+                        },
+                        'structure': {
+                            'directories': set(),
+                            'entry_points': [],
+                            'core_files': [],
+                            'sql_dependencies': []
+                        }
+                    },
+                    'insights': [],
+                    'files': {}
+                }
             _combine_sql_results(combined, result)
-        # Handle AnalysisResult objects
         elif isinstance(result, AnalysisResult):
-            # Convert AnalysisResult to a simple dict for easier processing
-            result_dict = {
-                'summary': result.summary,
-                'insights': result.insights,
-                'files': result.files
-            }
-            _combine_fs_results(combined, result_dict)
-        # Handle plain dictionaries
+            if combined is None:
+                # Initialize with the first AnalysisResult to preserve its structure
+                combined = {
+                    'summary': result.summary,
+                    'insights': result.insights,
+                    'files': result.files
+                }
+            else:
+                # Convert AnalysisResult to a simple dict for easier processing
+                result_dict = {
+                    'summary': result.summary,
+                    'insights': result.insights,
+                    'files': result.files
+                }
+                _combine_fs_results(combined, result_dict)
         else:
+            if combined is None:
+                combined = {
+                    'summary': {
+                        'project_stats': {
+                            'total_files': 0,
+                            'total_sql_objects': 0,
+                            'by_type': {},
+                            'lines_of_code': 0,
+                            'avg_file_size': 0
+                        },
+                        'code_metrics': {
+                            'functions': {'count': 0, 'with_docs': 0, 'complex': 0},
+                            'classes': {'count': 0, 'with_docs': 0},
+                            'sql_objects': {'procedures': 0, 'views': 0, 'functions': 0},
+                            'imports': {'count': 0, 'unique': set()}
+                        },
+                        'maintenance': {
+                            'todos': [],
+                            'comments_ratio': 0,
+                            'doc_coverage': 0
+                        },
+                        'structure': {
+                            'directories': set(),
+                            'entry_points': [],
+                            'core_files': [],
+                            'sql_dependencies': []
+                        }
+                    },
+                    'insights': [],
+                    'files': {}
+                }
             _combine_fs_results(combined, result)
 
+    if combined is None:
+        return AnalysisResult(**{
+            'summary': {
+                'project_stats': {'total_files': 0},
+                'code_metrics': {},
+                'maintenance': {},
+                'structure': {}
+            },
+            'insights': [],
+            'files': {}
+        })
+
     # Calculate final metrics
-    total_items = (combined['summary']['project_stats']['total_files'] +
-                  combined['summary']['project_stats']['total_sql_objects'])
+    total_items = (combined['summary']['project_stats'].get('total_files', 0) +
+                  combined['summary']['project_stats'].get('total_sql_objects', 0))
 
     if total_items > 0:
         combined['summary']['project_stats']['avg_file_size'] = (
@@ -486,13 +545,16 @@ def _combine_results(results: List[Union[dict, AnalysisResult]]) -> AnalysisResu
         )
 
     # Convert sets to lists for JSON serialization
-    combined['summary']['code_metrics']['imports']['unique'] = list(
-        combined['summary']['code_metrics']['imports']['unique']
-    )
-    combined['summary']['structure']['directories'] = list(
-        combined['summary']['structure']['directories']
-    )
+    if 'imports' in combined.get('code_metrics', {}):
+        combined['summary']['code_metrics']['imports']['unique'] = list(
+            combined['summary']['code_metrics']['imports'].get('unique', set())
+        )
+    if 'directories' in combined.get('structure', {}):
+        combined['summary']['structure']['directories'] = list(
+            combined['summary']['structure'].get('directories', set())
+        )
 
+    # Create AnalysisResult with preserved tree
     return AnalysisResult(**combined)
 
 def _combine_sql_results(combined: dict, sql_result: dict) -> None:
@@ -552,15 +614,41 @@ I'm sharing a codebase (or summary of a codebase) with you.
 
 Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
 
-IMPORTANT: All your instructions must be provided in a single, unformatted line for each file. Do not use multiple lines, bullet points, or any other formatting. My developer relies on this specific format to process your instructions correctly.
+IMPORTANT WORKFLOW:
+1. BEFORE suggesting any concrete code edits, always ask me to provide the complete current content of the specific files you need to modify. This ensures 100% accuracy in your suggestions since the analysis may not contain the latest version of every file.
 
-Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required. Do not skip any information - include all details, just format them as a continuous line of text for each file.
+2. When providing edit instructions, ALWAYS use this exact format:
+   - Start with the filename
+   - Show the existing code to find (use **Find:** followed by the exact code)
+   - Show the replacement code (use **Replace with:** followed by the new code)
+   - This allows for effortless search-and-replace editing
+
+FORMATTING RULES:
+- All your instructions must be provided in a single, unformatted line for each file when giving overview instructions
+- For detailed code changes, use the Find/Replace format described above
+- Do not use multiple lines, bullet points, or any other formatting for overview instructions
+- My developer relies on this specific format to process your instructions correctly
+- Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required
+- Do not skip any information - include all details, just format them as a continuous line of text for overview instructions
 
 In my next message, I'll tell you about a new request or question about this code.
 """
 
         # Prepare the complete message with files included
         full_message = system_prompt + "\n\n"
+
+        # Add system information
+        import platform
+        import sys
+        system_info = f"""# System Information
+
+**Operating System:** {platform.system()} {platform.release()} ({platform.version()})
+**Architecture:** {platform.machine()}
+**Python Version:** {sys.version}
+**Python Executable:** {sys.executable}
+
+"""
+        full_message += system_info
 
         # Add the analysis file
         analysis_file = output_path / 'analysis.txt'
@@ -821,8 +909,9 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Check for newer version (non-blocking)
         check_for_newer_version()
 
-        # Run file system analysis
+        # Run file system analysis with progress
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
+        
         analyzer = ProjectAnalyzer()
 
         # Pass include/exclude paths to analyzer if they were set in interactive mode
@@ -890,7 +979,23 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             if debug:
                 console.print(f"[blue]Using custom file collection with filters[/]")
 
-        fs_results = analyzer.analyze(path)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            # Pass progress to analyzer for file-by-file updates
+            analyzer.progress = progress
+            
+            # Create main analysis task
+            analysis_task = progress.add_task("Analyzing project files...", total=None)
+            
+            fs_results = analyzer.analyze(path)
+            progress.update(analysis_task, completed=100, total=100)
+
         results.append(fs_results)
 
         # Combine results
@@ -913,17 +1018,33 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         console.print(f"[bold green]✨ Analysis saved to {result_file}[/]")
 
-        # Handle full content export
+        # Handle full content export with progress
         if full:
             console.print("[bold blue]📦 Exporting full contents...[/]")
-            try:
-                ignore_patterns = parse_ignore_file(Path('.llmclignore')) + list(exclude)
-                export_full_content(path, output_path, ignore_patterns, exclude_paths)
-                console.print("[bold green]✨ Full content export complete![/]")
-            except Exception as e:
-                console.print(f"[yellow]Warning during full export: {str(e)}[/]")
-                if debug:
-                    console.print(traceback.format_exc())
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                console=console
+            ) as progress:
+                try:
+                    ignore_patterns = parse_ignore_file(Path('.llmclignore')) + list(exclude)
+                    
+                    # Count total files for progress
+                    all_files = list(path.rglob('*'))
+                    total_files = len([f for f in all_files if f.is_file() and not should_ignore(f, ignore_patterns) and not is_binary(f)])
+                    
+                    export_task = progress.add_task("Exporting file contents...", total=total_files)
+                    
+                    export_full_content(path, output_path, ignore_patterns, exclude_paths, True, progress, export_task)
+                    console.print("[bold green]✨ Full content export complete![/]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning during full export: {str(e)}[/]")
+                    if debug:
+                        console.print(traceback.format_exc())
 
         # Open in LLM if requested and not 'none'
         if open_in_llm and open_in_llm.lower() != 'none':

@@ -80,7 +80,7 @@ class ProjectAnalyzer:
             '.ts': JavaScriptAnalyzer(),
             '.tsx': JavaScriptAnalyzer(),
         }
-        
+
         # Try to add SQL analyzer, but don't crash if it fails
         try:
             sql_analyzer = SQLServerAnalyzer()
@@ -88,7 +88,7 @@ class ProjectAnalyzer:
         except Exception as e:
             import warnings
             warnings.warn(f"SQL Server analyzer could not be initialized: {e}")
-        
+
         return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
@@ -121,6 +121,10 @@ class ProjectAnalyzer:
             'insights': [],
             'files': {}
         }
+
+        # Add configuration analysis
+        config_analysis = self._analyze_project_configuration(path)
+        analysis['configuration'] = config_analysis
 
         # Collect analyzable files
         files = self._collect_files(path)
@@ -171,6 +175,22 @@ class ProjectAnalyzer:
             analysis['insights'] = self._generate_default_insights(analysis)
 
         return AnalysisResult(**analysis)
+
+    def _analyze_project_configuration(self, path: Path) -> dict:
+        """Analyze project configuration files for additional context."""
+        config_files = {
+            'package.json': self._analyze_package_json(path),
+            'tsconfig.json': self._analyze_tsconfig(path),
+            'next.config.js': self._analyze_next_config(path),
+            'tailwind.config.js': self._analyze_tailwind_config(path),
+            'pyproject.toml': self._analyze_pyproject_toml(path),
+            'requirements.txt': self._analyze_requirements(path),
+            '.env.example': self._analyze_env_example(path),
+            'README.md': self._extract_readme_summary(path)
+        }
+
+        # Filter out None values (files that don't exist)
+        return {k: v for k, v in config_files.items() if v is not None}
 
     def _collect_files(self, path: Path) -> List[Path]:
         """Collect all analyzable files from directory."""

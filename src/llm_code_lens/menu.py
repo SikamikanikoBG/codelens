@@ -1280,7 +1280,8 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Debug Mode", f"{state.options['debug']}", "F3"),
             ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
             ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5"),
-            ("LLM Provider", f"{state.options['llm_provider']}", "F6")
+            ("LLM Provider", f"{state.options['llm_provider']}", "F6"),
+            ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F7")  # NEW OPTION
         ]
         
         # Add exclude patterns

@@ -8,6 +8,7 @@ import click
 from pathlib import Path
 from typing import Dict, List, Union, Optional
 from rich.console import Console
+from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from .analyzer.base import ProjectAnalyzer, AnalysisResult
 from .analyzer.sql import SQLServerAnalyzer
 from .version import check_for_newer_version

@@ -14,9 +14,9 @@ class ProjectTree:
         self.ignore_patterns = ignore_patterns or []
         self.max_depth = max_depth
         self.tree_chars = {
-            'pipe': '   ',
-            'tee': ' ',
-            'last': ' ',
+            'pipe': '│   ',
+            'tee': '├── ',
+            'last': '└── ',
             'blank': '    '
         }
 

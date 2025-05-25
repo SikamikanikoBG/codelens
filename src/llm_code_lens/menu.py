@@ -1560,9 +1560,11 @@ def handle_input(key: int, state: MenuState) -> bool:
                 state.start_editing_option('sql_database')
             elif option_index == 5:  # LLM Provider
                 state.toggle_option('llm_provider')
-            elif option_index >= 6 and option_index < 6 + len(state.options['exclude_patterns']):
+            elif option_index == 6:  # Respect .gitignore
+                state.toggle_option('respect_gitignore')
+            elif option_index >= 7 and option_index < 7 + len(state.options['exclude_patterns']):
                 # Remove exclude pattern
-                pattern_index = option_index - 6
+                pattern_index = option_index - 7
                 state.remove_exclude_pattern(pattern_index)
     
     # Function key controls (work in any section)
@@ -1584,8 +1586,8 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.options['llm_provider'] = providers[next_index]
         state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
     elif key == curses.KEY_F7:
-        # Open current file in LLM
-        state._open_in_llm()
+        # Toggle gitignore respect
+        state.toggle_option('respect_gitignore')
     elif key == curses.KEY_F8:
         # Show update dialog if updates are available
         if state.new_version_available:

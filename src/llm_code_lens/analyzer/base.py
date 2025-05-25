@@ -10,6 +10,7 @@ class AnalysisResult:
     insights: List[str]
     files: Dict[str, dict]
     configuration: Optional[dict] = None
+    tree: Optional[str] = None
 
     def to_text(self) -> str:
         """Convert analysis to LLM-friendly text format."""

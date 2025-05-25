@@ -616,9 +616,22 @@ I'm sharing a codebase (or summary of a codebase) with you.
 
 Your task is to analyze this codebase and be able to convert any question or new feature request into very concrete, actionable, and detailed file-by-file instructions for my developer.
 
-IMPORTANT: All your instructions must be provided in a single, unformatted line for each file. Do not use multiple lines, bullet points, or any other formatting. My developer relies on this specific format to process your instructions correctly.
+IMPORTANT WORKFLOW:
+1. BEFORE suggesting any concrete code edits, always ask me to provide the complete current content of the specific files you need to modify. This ensures 100% accuracy in your suggestions since the analysis may not contain the latest version of every file.
 
-Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required. Do not skip any information - include all details, just format them as a continuous line of text for each file.
+2. When providing edit instructions, ALWAYS use this exact format:
+   - Start with the filename
+   - Show the existing code to find (use **Find:** followed by the exact code)
+   - Show the replacement code (use **Replace with:** followed by the new code)
+   - This allows for effortless search-and-replace editing
+
+FORMATTING RULES:
+- All your instructions must be provided in a single, unformatted line for each file when giving overview instructions
+- For detailed code changes, use the Find/Replace format described above
+- Do not use multiple lines, bullet points, or any other formatting for overview instructions
+- My developer relies on this specific format to process your instructions correctly
+- Your instructions should specify exactly what needs to be done in which file and why, so the developer can implement them with a full understanding of the changes required
+- Do not skip any information - include all details, just format them as a continuous line of text for overview instructions
 
 In my next message, I'll tell you about a new request or question about this code.
 """

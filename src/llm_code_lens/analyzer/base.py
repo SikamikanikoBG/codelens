@@ -395,3 +395,69 @@ class ProjectAnalyzer:
                 insights.append(f"Found {high_priority} high-priority TODOs")
 
         return insights
+
+    def _analyze_package_json(self, path: Path):
+        from .config import analyze_package_json
+        return analyze_package_json(path / 'package.json')
+
+    def _analyze_tsconfig(self, path: Path):
+        from .config import analyze_tsconfig
+        return analyze_tsconfig(path / 'tsconfig.json')
+
+    def _analyze_next_config(self, path: Path):
+        config_file = path / 'next.config.js'
+        if config_file.exists():
+            return {'exists': True, 'type': 'next.js config'}
+        return None
+
+    def _analyze_tailwind_config(self, path: Path):
+        for config_name in ['tailwind.config.js', 'tailwind.config.ts']:
+            config_file = path / config_name
+            if config_file.exists():
+                return {'exists': True, 'type': 'tailwind config', 'file': config_name}
+        return None
+
+    def _analyze_pyproject_toml(self, path: Path):
+        config_file = path / 'pyproject.toml'
+        if config_file.exists():
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Simple parsing - look for [project] section
+                    if '[project]' in content:
+                        lines = content.split('\n')
+                        for line in lines:
+                            if line.strip().startswith('name ='):
+                                name = line.split('=')[1].strip().strip('"\'')
+                                return {'name': name, 'type': 'python project'}
+                return {'exists': True, 'type': 'python project'}
+            except Exception:
+                return {'error': 'Failed to parse pyproject.toml'}
+        return None
+
+    def _analyze_requirements(self, path: Path):
+        req_file = path / 'requirements.txt'
+        if req_file.exists():
+            try:
+                with open(req_file, 'r') as f:
+                    lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+                return {'dependencies': len(lines), 'type': 'python requirements'}
+            except Exception:
+                return {'error': 'Failed to parse requirements.txt'}
+        return None
+
+    def _analyze_env_example(self, path: Path):
+        for env_name in ['.env.example', '.env.template', '.env.sample']:
+            env_file = path / env_name
+            if env_file.exists():
+                try:
+                    with open(env_file, 'r') as f:
+                        lines = [line for line in f if '=' in line and not line.startswith('#')]
+                    return {'env_vars': len(lines), 'type': 'environment template', 'file': env_name}
+                except Exception:
+                    return {'error': f'Failed to parse {env_name}'}
+        return None
+
+    def _extract_readme_summary(self, path: Path):
+        from .config import extract_readme_summary
+        return extract_readme_summary(path)

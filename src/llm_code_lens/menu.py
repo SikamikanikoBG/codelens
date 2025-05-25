@@ -8,7 +8,7 @@ import os
 import webbrowser
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Set, Optional
-
+from llm_code_lens.utils.gitignore import GitignoreParser
 
 class MenuState:
     """Class to manage the state of the interactive menu."""
@@ -169,7 +169,6 @@ class MenuState:
         # Initialize gitignore parser
         self.gitignore_parser = None
         if self.options['respect_gitignore']:
-            from ..utils.gitignore import GitignoreParser
             self.gitignore_parser = GitignoreParser(self.root_path)
             self.gitignore_parser.load_gitignore()
         
@@ -739,7 +738,6 @@ class MenuState:
 
             # Reinitialize gitignore parser
             if self.options[option_name]:
-                from ..utils.gitignore import GitignoreParser
                 self.gitignore_parser = GitignoreParser(self.root_path)
                 self.gitignore_parser.load_gitignore()
                 self.status_message = "Gitignore support enabled"

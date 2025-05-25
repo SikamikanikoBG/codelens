@@ -9,6 +9,7 @@ class AnalysisResult:
     summary: dict
     insights: List[str]
     files: Dict[str, dict]
+    configuration: Optional[dict] = None
 
     def to_text(self) -> str:
         """Convert analysis to LLM-friendly text format."""
@@ -18,11 +19,14 @@ class AnalysisResult:
     def to_json(self) -> str:
         """Convert analysis to JSON format."""
         import json
-        return json.dumps({
+        data = {
             'summary': self.summary,
             'insights': self.insights,
             'files': self.files
-        }, indent=2)
+        }
+        if self.configuration:
+            data['configuration'] = self.configuration
+        return json.dumps(data, indent=2)
 
 class BaseAnalyzer(ABC):
     """Base class for all code analyzers."""

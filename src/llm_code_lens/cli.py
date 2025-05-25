@@ -40,13 +40,18 @@ def parse_ignore_file(ignore_file: Path) -> List[str]:
 
     return patterns
 
-def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bool:
-    """Determine if a file or directory should be ignored based on patterns."""
+def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None, gitignore_parser: Optional['GitignoreParser'] = None) -> bool:
+    """Determine if a file or directory should be ignored based on patterns and gitignore."""
     if ignore_patterns is None:
         ignore_patterns = []
 
     path_str = str(path)
 
+    # First check gitignore patterns if parser is provided
+    if gitignore_parser and gitignore_parser.should_ignore(path):
+        return True
+
+    # Then check default ignores and custom patterns (existing logic)
     default_ignores = {
         # Version control and cache directories
         '.git', '__pycache__', '.pytest_cache', '.idea', '.vscode',
@@ -114,6 +119,9 @@ def should_ignore(path: Path, ignore_patterns: Optional[List[str]] = None) -> bo
 
     # Check custom ignore patterns
     for pattern in ignore_patterns:
+        # Skip gitignore patterns (they're handled above)
+        if pattern.startswith('!') or '/' in pattern or '*' in pattern:
+            continue
         if pattern in path_str or any(pattern in part for part in path.parts):
             return True
 

@@ -115,7 +115,7 @@ class MenuState:
             '.codelens'
         ]
         
-        # CLI options
+        # CLI options (updated)
         self.options = {
             'format': 'txt',           # Output format (txt or json)
             'full': False,             # Export full file contents
@@ -125,6 +125,7 @@ class MenuState:
             'sql_config': '',          # Path to SQL configuration file
             'exclude_patterns': [],    # Patterns to exclude
             'llm_provider': 'claude',  # Default LLM provider
+            'respect_gitignore': True,  # NEW OPTION
             'llm_options': {           # LLM provider-specific options
                 'provider': 'claude',  # Current provider
                 'prompt_template': 'code_analysis',  # Current template
@@ -164,6 +165,13 @@ class MenuState:
                 }
             }
         }
+
+        # Initialize gitignore parser
+        self.gitignore_parser = None
+        if self.options['respect_gitignore']:
+            from ..utils.gitignore import GitignoreParser
+            self.gitignore_parser = GitignoreParser(self.root_path)
+            self.gitignore_parser.load_gitignore()
         
         # Apply initial settings if provided
         if initial_settings:
@@ -426,17 +434,21 @@ class MenuState:
             self._update_parent_selection_state(directory.parent)
         
     def is_excluded(self, path: Path) -> bool:
-        """Check if a path is excluded."""
+        """Check if a path is excluded (updated to include gitignore)."""
         path_str = str(path)
-        
+
+        # Check gitignore first if enabled
+        if self.gitignore_parser and self.gitignore_parser.should_ignore(path):
+            return True
+
         # If the item is explicitly selected or partially selected, it's not excluded
         if path_str in self.selected_items or path_str in self.partially_selected_items:
             return False
-            
+
         # Check if this path is explicitly excluded
         if path_str in self.excluded_items:
             return True
-            
+
         # Check if any parent is excluded
         current = path.parent
         while current != self.root_path.parent:
@@ -445,15 +457,15 @@ class MenuState:
             if str(current) in self.selected_items or str(current) in self.partially_selected_items:
                 return False
             current = current.parent
-            
+
         # Check for common directories that should be excluded by default
         if path.is_dir() and path.name in self.common_excludes:
             return True
-            
+
         # For files in common directories, they're excluded by default
         if path.parent.name in self.common_excludes:
             return True
-                
+
         return False
     
     def get_current_item(self) -> Optional[Path]:
@@ -720,8 +732,25 @@ class MenuState:
         """Toggle a boolean option or cycle through value options."""
         if option_name not in self.options:
             return
-            
-        if option_name == 'format':
+
+        if option_name == 'respect_gitignore':
+            # Toggle gitignore support
+            self.options[option_name] = not self.options[option_name]
+
+            # Reinitialize gitignore parser
+            if self.options[option_name]:
+                from ..utils.gitignore import GitignoreParser
+                self.gitignore_parser = GitignoreParser(self.root_path)
+                self.gitignore_parser.load_gitignore()
+                self.status_message = "Gitignore support enabled"
+            else:
+                self.gitignore_parser = None
+                self.status_message = "Gitignore support disabled"
+
+            # Mark for rescan since ignore patterns changed
+            self.dirty_scan = True
+
+        elif option_name == 'format':
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
         elif option_name == 'llm_provider':
@@ -733,7 +762,7 @@ class MenuState:
         elif isinstance(self.options[option_name], bool):
             # Toggle boolean options
             self.options[option_name] = not self.options[option_name]
-        
+
         self.status_message = f"Option '{option_name}' set to: {self.options[option_name]}"
     
     def set_option(self, option_name: str, value: Any) -> None:

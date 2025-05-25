@@ -14,7 +14,21 @@ class AnalysisResult:
     def to_text(self) -> str:
         """Convert analysis to LLM-friendly text format."""
         from ..formatters.llm import format_analysis
-        return format_analysis(self)
+
+        # Format the analysis using the formatter
+        formatted = format_analysis(self)
+
+        # Add tree information if available
+        if 'tree' in self.__dict__.get('files', {}).values():
+            tree_outputs = []
+            for file_data in self.files.values():
+                if 'tree' in file_data:
+                    tree_outputs.append(f"\nFile: {file_data.get('name', 'Unknown')}\n{file_data['tree']}")
+
+            # Add all trees to the formatted output
+            return f"{formatted}\n\nPROJECT TREE(S):\n{''.join(tree_outputs)}"
+
+        return formatted
 
     def to_json(self) -> str:
         """Convert analysis to JSON format."""

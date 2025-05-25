@@ -1,26 +1,25 @@
-## [0.5.14] - 2025-05-25
+## [0.5.15] - 2025-05-25
 
 ### Added
-- Enhanced analysis context with project configuration detection (package.json, tsconfig.json, README.md)
-- Project tree structure visualization in analysis output
-- Sample code snippets extraction for better LLM context
-- Improved React/TypeScript/Next.js analysis with enhanced regex patterns
-- React component detection (function/class components)
-- React hooks usage analysis (built-in and custom hooks)
-- TypeScript interface and type alias detection
-- .gitignore file integration with optional support (enabled by default)
-- Interactive menu option to toggle .gitignore respect (F7 key)
+- Real-time progress bars for analysis operations with file-by-file progress indicators
+- System information context (OS, Python version, architecture) for enhanced LLM suggestions
+- Enhanced LLM integration with improved instruction format for effortless code editing
+- Two-step workflow: AI requests current files before suggesting edits for 100% accuracy
+- Search-and-replace format for all code suggestions to minimize editing effort
+- Progress tracking for tree generation and full content export operations
 
 ### Changed
-- JavaScript analyzer now provides much richer analysis data
-- Analysis output includes project tree structure early in the document
-- Enhanced formatting of JavaScript/TypeScript analysis results
-- Menu interface includes gitignore toggle option
+- Improved user experience with visual progress indicators during long operations
+- Enhanced system prompt with better workflow instructions for AI interactions
+- Progress bars now show current file being processed and elapsed time
+- Better feedback during analysis with spinner animations and percentage completion
 
 ### Fixed
-- N/A
+- Fixed AnalysisResult initialization error with tree parameter
+- Improved error handling for tree generation and progress tracking
+- Enhanced stability during long-running analysis operations
 
-## [0.5.13] - 2025-05-01
+## [0.5.14] - 2025-05-25
 
 ### Added
 - Added comprehensive default ignores for Python, JavaScript, Node.js, TypeScript, and other top 15 popular languages

@@ -2,10 +2,10 @@ from typing import Dict, List
 from ..analyzer.base import AnalysisResult
 
 def format_analysis(result: AnalysisResult) -> str:
-    """Format analysis results in an LLM-friendly text format."""
+    """Format analysis results with tree structure."""
     sections = []
 
-    # Project Overview
+    # Project Overview (existing)
     sections.extend([
         "CODEBASE SUMMARY:",
         f"This project contains {result.summary['project_stats']['total_files']} files:",
@@ -18,6 +18,25 @@ def format_analysis(result: AnalysisResult) -> str:
         f"Overall complexity: {sum(f.get('metrics', {}).get('complexity', 0) for f in result.files.values())}",
         "",
     ])
+
+    # NEW: Project Tree Structure
+    if 'project_tree' in result.summary.get('structure', {}):
+        sections.extend([
+            "PROJECT STRUCTURE:",
+            result.summary['structure']['project_tree'],
+            "",
+            "STRUCTURE SUMMARY:",
+            result.summary['structure']['tree_summary'],
+            "",
+        ])
+
+    # NEW: Configuration Summary
+    if 'configuration' in result.summary:
+        sections.extend([
+            "PROJECT CONFIGURATION:",
+            _format_configuration(result.summary['configuration']),
+            "",
+        ])
 
     # Key Insights
     if result.insights:
@@ -106,6 +125,38 @@ def format_analysis(result: AnalysisResult) -> str:
             sections.append("")  # Empty line between files
 
     return '\n'.join(sections)
+
+def _format_configuration(config: dict) -> str:
+    """Format configuration information."""
+    config_lines = []
+
+    for config_file, info in config.items():
+        if info and 'error' not in info:
+            config_lines.append(f"  {config_file}:")
+
+            if config_file == 'package.json':
+                if info.get('framework_indicators'):
+                    config_lines.append(f"    Frameworks: {', '.join(info['framework_indicators'])}")
+                if info.get('scripts'):
+                    config_lines.append(f"    Scripts: {', '.join(info['scripts'])}")
+                if info.get('dependencies'):
+                    config_lines.append(f"    Dependencies: {len(info['dependencies'])} packages")
+
+            elif config_file == 'tsconfig.json':
+                if info.get('target'):
+                    config_lines.append(f"    Target: {info['target']}")
+                if info.get('jsx'):
+                    config_lines.append(f"    JSX: {info['jsx']}")
+                if info.get('strict'):
+                    config_lines.append(f"    Strict mode: {info['strict']}")
+
+            elif config_file == 'README.md':
+                config_lines.append(f"    Summary: {info['summary'][:100]}...")
+
+        elif info and 'error' in info:
+            config_lines.append(f"  {config_file}: {info['error']}")
+
+    return '\n'.join(config_lines) if config_lines else "  No configuration files found"
 
 def _format_file_analysis(filename: str, analysis: dict) -> List[str]:
     """Format file analysis with improved error handling."""

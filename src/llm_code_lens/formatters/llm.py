@@ -30,6 +30,14 @@ def format_analysis(result: AnalysisResult) -> str:
             "",
         ])
 
+    # NEW: Project Tree from Analysis
+    if 'tree' in result.analysis:
+        sections.extend([
+            "PROJECT STRUCTURE:",
+            result.analysis['tree'],
+            "",
+        ])
+
     # NEW: Configuration Summary
     if 'configuration' in result.summary:
         sections.extend([

@@ -11,6 +11,7 @@ from rich.console import Console
 from .analyzer.base import ProjectAnalyzer, AnalysisResult
 from .analyzer.sql import SQLServerAnalyzer
 from .version import check_for_newer_version
+from .utils.gitignore import GitignoreParser  # Added this line
 import tiktoken
 import traceback
 import os

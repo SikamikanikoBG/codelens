@@ -5,6 +5,19 @@ def format_analysis(result: AnalysisResult) -> str:
     """Format analysis results with tree structure."""
     sections = []
 
+    # Add system information at the top
+    import platform
+    import sys
+    sections.extend([
+        "SYSTEM INFORMATION:",
+        "="*80,
+        f"Operating System: {platform.system()} {platform.release()} ({platform.version()})",
+        f"Architecture: {platform.machine()}",
+        f"Python Version: {sys.version}",
+        f"Python Executable: {sys.executable}",
+        "",
+    ])
+
     # Project Overview (existing)
     sections.extend([
         "CODEBASE SUMMARY:",

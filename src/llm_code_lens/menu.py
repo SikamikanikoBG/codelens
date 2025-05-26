@@ -184,6 +184,14 @@ class MenuState:
         self.editing_option = None     # Currently editing option (for text input)
         self.edit_buffer = ""          # Buffer for text input
         
+        # Immediately exclude common directories in the root to fix the node_modules issue
+        try:
+            for item in self.root_path.iterdir():
+                if item.is_dir() and item.name in self.common_excludes:
+                    self.excluded_items.add(str(item))
+        except (PermissionError, OSError):
+            pass
+
         # Load saved state if available - will be done after scanning completes
         # self._load_state()
         
@@ -592,13 +600,18 @@ class MenuState:
                     self.scan_current_dir = os.path.basename(root)
                     self.status_message = f"Scanning: {self.scan_current_dir} ({progress_pct}%)"
                 
-                # Check if any of the directories match our common excludes
+                # Check if any of the directories match our common excludes and prevent traversal
                 for d in dirs[:]:  # Create a copy to safely modify during iteration
                     if d in self.common_excludes:
                         path = Path(os.path.join(root, d))
                         path_str = str(path)
-                        if path_str not in self.excluded_items:
+                        # Add to excluded items if not explicitly selected
+                        if (path_str not in self.excluded_items and
+                            path_str not in self.selected_items and
+                            path_str not in self.partially_selected_items):
                             self.excluded_items.add(path_str)
+                        # Remove from dirs to prevent os.walk from traversing it
+                        dirs.remove(d)
                 
                 # Force screen refresh periodically
                 if self.scan_progress % 50 == 0:
@@ -711,13 +724,14 @@ class MenuState:
                     items = sorted(path.iterdir(), 
                                   key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                     
-                    # Use the class's common_excludes list
+                    # Pre-exclude common directories and ensure they stay excluded
                     for item in items:
-                        # Auto-exclude common directories but still show them in the list
                         if item.is_dir() and item.name in self.common_excludes:
-                            if str(item) not in self.excluded_items:
-                                self.excluded_items.add(str(item))
-                        
+                            item_str = str(item)
+                            # Add to excluded_items if not explicitly selected
+                            if item_str not in self.selected_items and item_str not in self.partially_selected_items:
+                                self.excluded_items.add(item_str)
+
                         # Include all files/directories in the visible list
                         self._build_item_list(item, depth + 1)
                 except PermissionError:

@@ -500,9 +500,9 @@ class MenuState:
     
     def rebuild_visible_items(self) -> None:
         """Rebuild the list of visible items based on expanded directories."""
-        # Always rebuild when called - remove dirty check for expansion/collapse
-        # if not self.dirty_scan:
-        #     return
+        # Only rebuild if dirty flag is set (for major changes like selection toggles)
+        if not self.dirty_scan:
+            return
 
         try:
             # Auto-exclude common directories before building the list
@@ -1556,14 +1556,22 @@ def handle_input(key: int, state: MenuState) -> bool:
         elif key == curses.KEY_RIGHT and current_item and current_item.is_dir():
             # Expand directory
             state.expanded_dirs.add(str(current_item))
-            # Don't rebuild - just mark dirty for next refresh
-            state.dirty_scan = False  # Prevent automatic rebuild
+            # Rebuild visible items to show expanded content
+            state.visible_items = []
+            state._build_item_list(state.root_path, 0)
+            # Adjust cursor if needed
+            if state.cursor_pos >= len(state.visible_items):
+                state.cursor_pos = len(state.visible_items) - 1
         elif key == curses.KEY_LEFT and current_item and current_item.is_dir():
             # Collapse directory
             if str(current_item) in state.expanded_dirs:
                 state.expanded_dirs.remove(str(current_item))
-                # Don't rebuild - just mark dirty for next refresh
-                state.dirty_scan = False  # Prevent automatic rebuild
+                # Rebuild visible items to hide collapsed content
+                state.visible_items = []
+                state._build_item_list(state.root_path, 0)
+                # Adjust cursor if needed
+                if state.cursor_pos >= len(state.visible_items):
+                    state.cursor_pos = len(state.visible_items) - 1
             else:
                 # If already collapsed, go to parent
                 parent = current_item.parent

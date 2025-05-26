@@ -153,8 +153,14 @@ class ProjectAnalyzer:
         if hasattr(self, 'progress'):
             file_task = self.progress.add_task("Processing files...", total=total_estimated)
 
+        # Use the custom file collection method if available, otherwise use default
+        if hasattr(self, '_collect_files'):
+            files_to_analyze = self._collect_files(path)
+        else:
+            files_to_analyze = self._collect_files(path)
+
         # Stream process files as we find them
-        for file_path in path.rglob('*'):
+        for file_path in files_to_analyze:
             if not file_path.is_file():
                 continue
             if analyzer := self.analyzers.get(file_path.suffix.lower()):

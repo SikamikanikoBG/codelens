@@ -198,26 +198,26 @@ class MenuState:
             
     def toggle_selection(self, path: Path, fully_select: bool = False) -> None:
         """
-        Toggle selection status of an item.
-        
+        Toggle selection status - update state only, no rescanning.
+
         Args:
             path: The path to toggle
             fully_select: If True, fully select the directory and all children
         """
         path_str = str(path)
-        
+
         # Determine the current state
         is_excluded = path_str in self.excluded_items
         is_selected = path_str in self.selected_items
         is_partially_selected = path_str in self.partially_selected_items
-        
+
         # If it's a directory, we'll need to handle all children
         if path.is_dir():
             # If item was excluded, move to partially selected or fully selected state
             if is_excluded:
                 # Remove this directory from excluded
                 self.excluded_items.discard(path_str)
-                
+
                 if fully_select:
                     # Move to fully selected
                     self.selected_items.add(path_str)
@@ -230,9 +230,9 @@ class MenuState:
                     self.selected_items.discard(path_str)
                     # Expand the directory to show its contents
                     self.expanded_dirs.add(path_str)
-                
-                # Mark directory structure as dirty to force rescan
-                self.dirty_scan = True
+
+                # Don't mark dirty - avoid immediate rescan
+                # self.dirty_scan = True  # REMOVED
                 
             # If item was explicitly selected, move to excluded
             elif is_selected:
@@ -299,9 +299,9 @@ class MenuState:
             # Update parent directory's selection state
             self._update_parent_selection_state(path.parent)
             
-            # Mark directory structure as dirty to force rescan
-            self.dirty_scan = True
-            
+            # Don't rescan immediately - just update state
+            # self.dirty_scan = True  # REMOVED
+
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
         path_str = str(path)
@@ -1533,8 +1533,12 @@ def handle_input(key: int, state: MenuState) -> bool:
                         break
             state.rebuild_visible_items()
         elif key == ord(' ') and current_item:
-            # Full select with all sub-elements
+            # Full select with all sub-elements - no rescan
             state.toggle_selection(current_item, fully_select=True)
+            # Don't rebuild visible items immediately - just update status
+            excluded_count = len(state.excluded_items)
+            selected_count = len(state.selected_items)
+            state.status_message = f"Selection updated: {excluded_count} excluded, {selected_count} selected"
     
     # Options section controls
     elif state.active_section == 'options':

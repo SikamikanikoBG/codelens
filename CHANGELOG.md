@@ -1,3 +1,21 @@
+## [0.5.16] - 2025-05-26
+
+### Added
+- Intelligent size reduction for large codebases (>10,000 LOC)
+- Condensed formatting automatically applied to reduce analysis output by 60-75%
+- Smart filtering of verbose elements while preserving essential architectural information
+
+### Enhanced
+- File analysis formatting now adapts based on total project size
+- TODO sections grouped by priority with summary counts for large projects
+- Function listings limited to complex functions (complexity > 5) in large codebases
+- Import/export statements filtered out for large projects to reduce noise
+
+### Technical
+- Added `is_large_codebase` detection based on total LOC threshold
+- Enhanced formatters with size-aware conditional rendering
+- Preserved all critical business logic and architectural insights
+
 ## [0.5.15] - 2025-05-25
 
 ### Added

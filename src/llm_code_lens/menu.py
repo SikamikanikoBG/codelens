@@ -184,6 +184,19 @@ class MenuState:
         self.editing_option = None     # Currently editing option (for text input)
         self.edit_buffer = ""          # Buffer for text input
         
+        # Immediately exclude common directories in the root and mark them properly
+        try:
+            for item in self.root_path.iterdir():
+                if item.is_dir() and item.name in self.common_excludes:
+                    self.excluded_items.add(str(item))
+                    # Also recursively exclude all children
+                    try:
+                        self._recursively_exclude_simple(item)
+                    except (PermissionError, OSError):
+                        pass
+        except (PermissionError, OSError):
+            pass
+
         # Load saved state if available - will be done after scanning completes
         # self._load_state()
         
@@ -198,26 +211,26 @@ class MenuState:
             
     def toggle_selection(self, path: Path, fully_select: bool = False) -> None:
         """
-        Toggle selection status of an item.
-        
+        Toggle selection status - update state only, no rescanning.
+
         Args:
             path: The path to toggle
             fully_select: If True, fully select the directory and all children
         """
         path_str = str(path)
-        
+
         # Determine the current state
         is_excluded = path_str in self.excluded_items
         is_selected = path_str in self.selected_items
         is_partially_selected = path_str in self.partially_selected_items
-        
+
         # If it's a directory, we'll need to handle all children
         if path.is_dir():
             # If item was excluded, move to partially selected or fully selected state
             if is_excluded:
                 # Remove this directory from excluded
                 self.excluded_items.discard(path_str)
-                
+
                 if fully_select:
                     # Move to fully selected
                     self.selected_items.add(path_str)
@@ -230,9 +243,9 @@ class MenuState:
                     self.selected_items.discard(path_str)
                     # Expand the directory to show its contents
                     self.expanded_dirs.add(path_str)
-                
-                # Mark directory structure as dirty to force rescan
-                self.dirty_scan = True
+
+                # Don't mark dirty - avoid immediate rescan
+                # self.dirty_scan = True  # REMOVED
                 
             # If item was explicitly selected, move to excluded
             elif is_selected:
@@ -299,9 +312,9 @@ class MenuState:
             # Update parent directory's selection state
             self._update_parent_selection_state(path.parent)
             
-            # Mark directory structure as dirty to force rescan
-            self.dirty_scan = True
-            
+            # Don't rescan immediately - just update state
+            # self.dirty_scan = True  # REMOVED
+
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
         path_str = str(path)
@@ -487,7 +500,7 @@ class MenuState:
     
     def rebuild_visible_items(self) -> None:
         """Rebuild the list of visible items based on expanded directories."""
-        # Only rebuild if dirty flag is set
+        # Only rebuild if dirty flag is set (for major changes like selection toggles)
         if not self.dirty_scan:
             return
 
@@ -592,13 +605,18 @@ class MenuState:
                     self.scan_current_dir = os.path.basename(root)
                     self.status_message = f"Scanning: {self.scan_current_dir} ({progress_pct}%)"
                 
-                # Check if any of the directories match our common excludes
+                # Check if any of the directories match our common excludes and prevent traversal
                 for d in dirs[:]:  # Create a copy to safely modify during iteration
                     if d in self.common_excludes:
                         path = Path(os.path.join(root, d))
                         path_str = str(path)
-                        if path_str not in self.excluded_items:
+                        # Add to excluded items if not explicitly selected
+                        if (path_str not in self.excluded_items and
+                            path_str not in self.selected_items and
+                            path_str not in self.partially_selected_items):
                             self.excluded_items.add(path_str)
+                        # Remove from dirs to prevent os.walk from traversing it
+                        dirs.remove(d)
                 
                 # Force screen refresh periodically
                 if self.scan_progress % 50 == 0:
@@ -698,6 +716,21 @@ class MenuState:
             # Log the error but continue
             self.status_message = f"Error excluding directory: {str(e)}"
     
+    def _recursively_exclude_simple(self, directory: Path) -> None:
+        """Simple recursive exclusion without triggering rescans."""
+        try:
+            dir_str = str(directory)
+            self.excluded_items.add(dir_str)
+
+            # Process children without complex state management
+            for item in directory.iterdir():
+                item_str = str(item)
+                self.excluded_items.add(item_str)
+                if item.is_dir():
+                    self._recursively_exclude_simple(item)
+        except (PermissionError, OSError):
+            pass
+
     def _build_item_list(self, path: Path, depth: int) -> None:
         """Recursively build the list of visible items."""
         try:
@@ -711,13 +744,19 @@ class MenuState:
                     items = sorted(path.iterdir(), 
                                   key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                     
-                    # Use the class's common_excludes list
+                    # Pre-exclude common directories and ensure they stay excluded
                     for item in items:
-                        # Auto-exclude common directories but still show them in the list
                         if item.is_dir() and item.name in self.common_excludes:
-                            if str(item) not in self.excluded_items:
-                                self.excluded_items.add(str(item))
-                        
+                            item_str = str(item)
+                            # Always mark common directories as excluded unless explicitly selected
+                            if item_str not in self.selected_items and item_str not in self.partially_selected_items:
+                                self.excluded_items.add(item_str)
+                                # Recursively exclude children too
+                                try:
+                                    self._recursively_exclude_simple(item)
+                                except:
+                                    pass
+
                         # Include all files/directories in the visible list
                         self._build_item_list(item, depth + 1)
                 except PermissionError:
@@ -1213,18 +1252,16 @@ def draw_menu(stdscr, state: MenuState) -> None:
             is_dir = path.is_dir()
             is_excluded = state.is_excluded(path)
             
-            # Prepare the display string
+            # Prepare the display string - simplified folder states
             indent = "  " * depth
-            prefix = "+ " if is_dir and str(path) in state.expanded_dirs else \
-                     "- " if is_dir else "  "
+            if is_dir:
+                prefix = "- " if str(path) in state.expanded_dirs else "+ "
+            else:
+                prefix = "  "
             
-            # Determine selection indicator based on exclusion/selection status
+            # Determine selection indicator - simplified to only + and -
             path_str = str(path)
-            if path_str in state.selected_items:
-                sel_indicator = "[*]"  # Explicitly selected
-            elif path_str in state.partially_selected_items:
-                sel_indicator = "[~]"  # Partially selected
-            elif is_excluded:
+            if is_excluded:
                 sel_indicator = "[-]"  # Excluded
             else:
                 sel_indicator = "[+]"  # Included
@@ -1519,11 +1556,22 @@ def handle_input(key: int, state: MenuState) -> bool:
         elif key == curses.KEY_RIGHT and current_item and current_item.is_dir():
             # Expand directory
             state.expanded_dirs.add(str(current_item))
-            state.rebuild_visible_items()
+            # Rebuild visible items to show expanded content
+            state.visible_items = []
+            state._build_item_list(state.root_path, 0)
+            # Adjust cursor if needed
+            if state.cursor_pos >= len(state.visible_items):
+                state.cursor_pos = len(state.visible_items) - 1
         elif key == curses.KEY_LEFT and current_item and current_item.is_dir():
             # Collapse directory
             if str(current_item) in state.expanded_dirs:
                 state.expanded_dirs.remove(str(current_item))
+                # Rebuild visible items to hide collapsed content
+                state.visible_items = []
+                state._build_item_list(state.root_path, 0)
+                # Adjust cursor if needed
+                if state.cursor_pos >= len(state.visible_items):
+                    state.cursor_pos = len(state.visible_items) - 1
             else:
                 # If already collapsed, go to parent
                 parent = current_item.parent
@@ -1531,10 +1579,13 @@ def handle_input(key: int, state: MenuState) -> bool:
                     if path == parent:
                         state.cursor_pos = i
                         break
-            state.rebuild_visible_items()
         elif key == ord(' ') and current_item:
-            # Full select with all sub-elements
+            # Full select with all sub-elements - no rescan
             state.toggle_selection(current_item, fully_select=True)
+            # Don't rebuild visible items immediately - just update status
+            excluded_count = len(state.excluded_items)
+            selected_count = len(state.selected_items)
+            state.status_message = f"Selection updated: {excluded_count} excluded, {selected_count} selected"
     
     # Options section controls
     elif state.active_section == 'options':

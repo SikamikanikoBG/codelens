@@ -97,7 +97,7 @@ class ProjectAnalyzer:
         return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
-        """Analyze entire project directory with tree structure."""
+        """Analyze entire project directory with streaming processing and progress."""
         # Initialize analysis structure
         analysis = {
             'summary': {
@@ -131,16 +131,38 @@ class ProjectAnalyzer:
         config_analysis = self._analyze_project_configuration(path)
         analysis['configuration'] = config_analysis
 
-        # Collect analyzable files
-        files = self._collect_files(path)
-        analysis['summary']['project_stats']['total_files'] = len(files)
+        # Streaming file processing - don't collect all files first
+        processed_files = 0
+        total_estimated = 0
 
-        # Process each file with progress updates
-        total_files = len(files)
+        # Quick estimation for progress bar
         if hasattr(self, 'progress'):
-            file_task = self.progress.add_task("Processing files...", total=total_files)
+            estimation_task = self.progress.add_task("Estimating files...", total=None)
+            try:
+                for _ in path.rglob('*'):
+                    if total_estimated % 100 == 0:  # Update every 100 files
+                        self.progress.update(estimation_task, description=f"Found {total_estimated} files...")
+                    total_estimated += 1
+                    if total_estimated > 10000:  # Cap estimation for very large repos
+                        break
+                self.progress.remove_task(estimation_task)
+            except:
+                self.progress.remove_task(estimation_task)
+                total_estimated = 1000  # Default estimate
 
-        for i, file_path in enumerate(files):
+        if hasattr(self, 'progress'):
+            file_task = self.progress.add_task("Processing files...", total=total_estimated)
+
+        # Use the custom file collection method if available, otherwise use default
+        if hasattr(self, '_collect_files'):
+            files_to_analyze = self._collect_files(path)
+        else:
+            files_to_analyze = self._collect_files(path)
+
+        # Stream process files as we find them
+        for file_path in files_to_analyze:
+            if not file_path.is_file():
+                continue
             if analyzer := self.analyzers.get(file_path.suffix.lower()):
                 try:
                     # Update progress
@@ -152,7 +174,6 @@ class ProjectAnalyzer:
 
                     # Ensure file_analysis has required fields
                     if not isinstance(file_analysis, dict):
-                        print(f"Error analyzing {file_path}: Invalid analysis result")
                         continue
 
                     if 'type' not in file_analysis:
@@ -160,8 +181,10 @@ class ProjectAnalyzer:
 
                     # Skip files with errors unless they have partial results
                     if 'errors' in file_analysis and not file_analysis.get('metrics', {}).get('loc', 0):
-                        print(f"Error analyzing {file_path}: {file_analysis['errors']}")
                         continue
+
+                    # Add repo size info for formatting decisions
+                    file_analysis['_repo_total_loc'] = analysis['summary']['project_stats']['lines_of_code']
 
                     # Update file types count
                     ext = file_path.suffix
@@ -174,9 +197,15 @@ class ProjectAnalyzer:
                     # Update metrics
                     self._update_metrics(analysis, file_analysis, str_path)
 
+                    processed_files += 1
+
                 except Exception as e:
-                    print(f"Error analyzing {file_path}: {e}")
+                    if hasattr(self, 'progress') and hasattr(self, 'debug') and self.debug:
+                        self.progress.update(file_task, description=f"Error: {file_path.name}")
                     continue
+
+        # Update final count
+        analysis['summary']['project_stats']['total_files'] = processed_files
 
         # Add tree structure generation with progress
         if hasattr(self, 'progress'):

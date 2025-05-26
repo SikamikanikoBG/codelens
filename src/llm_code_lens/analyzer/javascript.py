@@ -64,187 +64,193 @@ class JavaScriptAnalyzer:
         return analysis
 
     def _extract_imports_exports(self, content: str, analysis: dict) -> None:
-        """Extract imports and exports with enhanced patterns."""
+        """Extract imports and exports with simplified patterns."""
 
-        # Enhanced import patterns
-        import_patterns = [
-            # Standard imports: import { a, b } from 'module'
-            r'import\s+\{([^}]+)\}\s+from\s+[\'"]([^\'"]+)[\'"]',
-            # Default imports: import React from 'react'
-            r'import\s+(\w+)\s+from\s+[\'"]([^\'"]+)[\'"]',
-            # Namespace imports: import * as React from 'react'
-            r'import\s+\*\s+as\s+(\w+)\s+from\s+[\'"]([^\'"]+)[\'"]',
-            # Side-effect imports: import 'module'
-            r'import\s+[\'"]([^\'"]+)[\'"]',
-            # Dynamic imports: import() statements
-            r'import\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)',
-        ]
-
-        for pattern in import_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                analysis['imports'].append(match.group(0).strip())
-
-        # Enhanced export patterns
-        export_patterns = [
-            # Named exports: export { a, b }
-            r'export\s+\{[^}]+\}',
-            # Default exports: export default
-            r'export\s+default\s+[^;]+',
-            # Direct exports: export const/function/class
-            r'export\s+(const|let|var|function|class|interface|type)\s+\w+',
-            # Re-exports: export * from 'module'
-            r'export\s+\*\s+from\s+[\'"][^\'"]+[\'"]',
-        ]
-
-        for pattern in export_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                analysis['exports'].append(match.group(0).strip())
+        # Simplified import patterns - process line by line for better performance
+        for line_num, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
+            if line.startswith('import '):
+                analysis['imports'].append(line)
+            elif line.startswith('export '):
+                analysis['exports'].append(line)
 
     def _extract_functions(self, content: str, analysis: dict) -> None:
-        """Extract functions with enhanced patterns."""
+        """Extract functions with simplified patterns."""
 
-        function_patterns = [
+        # Simplified function extraction - process line by line
+        for line_num, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
+
             # Regular function declarations
-            r'(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)\s*(?::\s*([^{]+))?\s*\{',
-            # Arrow functions with names
-            r'(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*(?::\s*([^=]+))?\s*=>\s*\{',
-            # Arrow functions (simple)
-            r'(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?([^=]*)\s*=>\s*([^;]+);?',
-            # Method definitions in classes/objects
-            r'(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*(?::\s*([^{]+))?\s*\{',
-        ]
+            if line.startswith('function ') or ' function ' in line:
+                match = re.search(r'function\s+(\w+)', line)
+                if match:
+                    analysis['functions'].append({
+                        'name': match.group(1),
+                        'params': [],
+                        'return_type': None,
+                        'line_number': line_num,
+                        'is_async': 'async' in line
+                    })
 
-        for pattern in function_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                func_name = match.group(1)
-                params = match.group(2) if len(match.groups()) > 1 else ''
-                return_type = match.group(3) if len(match.groups()) > 2 else None
-
-                analysis['functions'].append({
-                    'name': func_name,
-                    'params': [p.strip() for p in params.split(',') if p.strip()],
-                    'return_type': return_type.strip() if return_type else None,
-                    'line_number': content[:match.start()].count('\n') + 1,
-                    'is_async': 'async' in match.group(0)
-                })
+            # Arrow functions
+            elif '=>' in line and ('const ' in line or 'let ' in line or 'var ' in line):
+                match = re.search(r'(?:const|let|var)\s+(\w+)\s*=', line)
+                if match:
+                    analysis['functions'].append({
+                        'name': match.group(1),
+                        'params': [],
+                        'return_type': None,
+                        'line_number': line_num,
+                        'is_async': 'async' in line
+                    })
 
     def _extract_classes(self, content: str, analysis: dict) -> None:
-        """Extract classes with enhanced patterns."""
+        """Extract classes with simplified patterns."""
 
-        class_patterns = [
-            # Regular class declarations
-            r'class\s+(\w+)(?:\s+extends\s+([^{]+))?\s*\{',
-            # Class expressions
-            r'(?:const|let|var)\s+\w+\s*=\s*class\s+(\w+)(?:\s+extends\s+([^{]+))?\s*\{'
-        ]
-
-        for pattern in class_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                analysis['classes'].append({
-                    'name': match.group(1),
-                    'extends': match.group(2).strip() if match.group(2) else None,
-                    'line_number': content[:match.start()].count('\n') + 1
-                })
+        # Simplified class extraction - process line by line
+        for line_num, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
+            if line.startswith('class '):
+                match = re.search(r'class\s+(\w+)', line)
+                if match:
+                    extends_match = re.search(r'extends\s+(\w+)', line)
+                    analysis['classes'].append({
+                        'name': match.group(1),
+                        'extends': extends_match.group(1) if extends_match else None,
+                        'line_number': line_num
+                    })
 
     def _extract_react_components(self, content: str, analysis: dict) -> None:
-        """Extract React components."""
+        """Extract React components with simplified patterns."""
 
-        component_patterns = [
-            # Function components
-            r'(?:const|function)\s+([A-Z]\w+)\s*[=:]?\s*(?:\([^)]*\))?\s*(?::\s*[^=>{]+)?\s*(?:=>)?\s*\{[^}]*return\s*\(',
-            # Function components with JSX
-            r'(?:const|function)\s+([A-Z]\w+)\s*[=:]?\s*(?:\([^)]*\))?\s*(?::\s*[^=>{]+)?\s*(?:=>)?\s*\{[^}]*<\w+',
+        # Simplified component extraction - process line by line
+        for line_num, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
+
+            # Function components (must start with capital letter)
+            if ('const ' in line or 'function ' in line) and '=>' in line:
+                match = re.search(r'(?:const|function)\s+([A-Z]\w+)', line)
+                if match:
+                    analysis['components'].append({
+                        'name': match.group(1),
+                        'type': 'function',
+                        'line_number': line_num,
+                        'has_jsx': '<' in line
+                    })
+
             # Class components
-            r'class\s+([A-Z]\w+)\s+extends\s+(?:React\.)?(?:Component|PureComponent)',
-        ]
-
-        for pattern in component_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE | re.DOTALL):
-                component_name = match.group(1)
-                line_number = content[:match.start()].count('\n') + 1
-
-                # Determine component type
-                is_class = 'class' in match.group(0)
-
-                analysis['components'].append({
-                    'name': component_name,
-                    'type': 'class' if is_class else 'function',
-                    'line_number': line_number,
-                    'has_jsx': '<' in match.group(0) and '>' in match.group(0)
-                })
+            elif line.startswith('class ') and 'extends' in line and ('Component' in line or 'PureComponent' in line):
+                match = re.search(r'class\s+([A-Z]\w+)', line)
+                if match:
+                    analysis['components'].append({
+                        'name': match.group(1),
+                        'type': 'class',
+                        'line_number': line_num,
+                        'has_jsx': False
+                    })
 
     def _extract_react_hooks(self, content: str, analysis: dict) -> None:
-        """Extract React hooks usage."""
+        """Extract React hooks usage with simplified patterns."""
 
-        # Common React hooks
-        hook_patterns = [
-            r'(useState)\s*\(',
-            r'(useEffect)\s*\(',
-            r'(useContext)\s*\(',
-            r'(useReducer)\s*\(',
-            r'(useCallback)\s*\(',
-            r'(useMemo)\s*\(',
-            r'(useRef)\s*\(',
-            r'(useImperativeHandle)\s*\(',
-            r'(useLayoutEffect)\s*\(',
-            r'(useDebugValue)\s*\(',
-            # Custom hooks (start with 'use')
-            r'(use[A-Z]\w*)\s*\(',
-        ]
+        # Simplified hook extraction - process line by line
+        standard_hooks = ['useState', 'useEffect', 'useContext', 'useReducer', 'useCallback', 'useMemo', 'useRef', 'useImperativeHandle', 'useLayoutEffect', 'useDebugValue']
 
-        for pattern in hook_patterns:
-            for match in re.finditer(pattern, content):
-                hook_name = match.group(1)
-                line_number = content[:match.start()].count('\n') + 1
+        for line_num, line in enumerate(content.splitlines(), 1):
+            for hook in standard_hooks:
+                if hook + '(' in line:
+                    analysis['hooks'].append({
+                        'name': hook,
+                        'line_number': line_num,
+                        'is_custom': False
+                    })
 
-                analysis['hooks'].append({
-                    'name': hook_name,
-                    'line_number': line_number,
-                    'is_custom': not hook_name.startswith(('useState', 'useEffect', 'useContext', 'useReducer', 'useCallback', 'useMemo', 'useRef'))
-                })
+            # Custom hooks (simplified - look for use + CapitalLetter pattern)
+            custom_match = re.search(r'(use[A-Z]\w*)\s*\(', line)
+            if custom_match:
+                hook_name = custom_match.group(1)
+                if hook_name not in standard_hooks:
+                    analysis['hooks'].append({
+                        'name': hook_name,
+                        'line_number': line_num,
+                        'is_custom': True
+                    })
 
     def _extract_typescript_constructs(self, content: str, analysis: dict) -> None:
-        """Extract TypeScript interfaces and types."""
+        """Extract TypeScript interfaces and types with simplified patterns."""
 
-        # Interface pattern
-        interface_pattern = r'interface\s+(\w+)(?:\s+extends\s+([^{]+))?\s*\{'
-        for match in re.finditer(interface_pattern, content):
-            analysis['interfaces'].append({
-                'name': match.group(1),
-                'extends': match.group(2).strip() if match.group(2) else None,
-                'line_number': content[:match.start()].count('\n') + 1
-            })
+        # Simplified TypeScript extraction - process line by line
+        for line_num, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
 
-        # Type alias pattern
-        type_pattern = r'type\s+(\w+)(?:<[^>]*>)?\s*=\s*([^;]+);'
-        for match in re.finditer(type_pattern, content):
-            analysis['types'].append({
-                'name': match.group(1),
-                'definition': match.group(2).strip(),
-                'line_number': content[:match.start()].count('\n') + 1
-            })
+            # Interface declarations
+            if line.startswith('interface '):
+                match = re.search(r'interface\s+(\w+)', line)
+                if match:
+                    extends_match = re.search(r'extends\s+(\w+)', line)
+                    analysis['interfaces'].append({
+                        'name': match.group(1),
+                        'extends': extends_match.group(1) if extends_match else None,
+                        'line_number': line_num
+                    })
+
+            # Type aliases
+            elif line.startswith('type ') and '=' in line:
+                match = re.search(r'type\s+(\w+)', line)
+                if match:
+                    analysis['types'].append({
+                        'name': match.group(1),
+                        'definition': line.split('=', 1)[1].strip().rstrip(';'),
+                        'line_number': line_num
+                    })
 
     def _extract_comments_todos(self, content: str, analysis: dict) -> None:
-        """Extract comments and TODOs (existing functionality enhanced)."""
+        """Extract comments and TODOs with simplified patterns."""
 
-        comment_patterns = [
-            (r'//(.*)$', False),  # Single-line comments
-            (r'/\*([^*]*\*+(?:[^/*][^*]*\*+)*/)/', True)  # Multi-line comments
-        ]
+        # Simplified comment extraction - process line by line
+        for line_num, line in enumerate(content.splitlines(), 1):
+            # Single-line comments
+            if '//' in line:
+                comment_start = line.find('//')
+                comment = line[comment_start + 2:].strip()
+                if comment:
+                    # Check for TODOs/FIXMEs
+                    if any(marker in comment.upper() for marker in ['TODO', 'FIXME', 'XXX', 'HACK', 'BUG']):
+                        analysis['todos'].append({
+                            'line': line_num,
+                            'text': comment
+                        })
+                    else:
+                        analysis['comments'].append({
+                            'line': line_num,
+                            'text': comment
+                        })
 
-        for pattern, is_multiline in comment_patterns:
-            for match in re.finditer(pattern, content, re.MULTILINE if not is_multiline else re.MULTILINE | re.DOTALL):
-                comment = match.group(1).strip()
-                line_number = content[:match.start()].count('\n') + 1
+        # Multi-line comments (simplified - just find start/end markers)
+        in_multiline = False
+        multiline_start = 0
+        multiline_content = []
 
-                # Check for TODOs/FIXMEs
-                if any(marker in comment.upper() for marker in ['TODO', 'FIXME', 'XXX', 'HACK', 'BUG']):
-                    analysis['todos'].append({
-                        'line': line_number,
-                        'text': comment
-                    })
-                else:
-                    analysis['comments'].append({
-                        'line': line_number,
-                        'text': comment
-                    })
+        for line_num, line in enumerate(content.splitlines(), 1):
+            if '/*' in line and not in_multiline:
+                in_multiline = True
+                multiline_start = line_num
+                multiline_content = [line[line.find('/*') + 2:]]
+            elif '*/' in line and in_multiline:
+                in_multiline = False
+                multiline_content.append(line[:line.find('*/')])
+                comment = ' '.join(multiline_content).strip()
+                if comment:
+                    if any(marker in comment.upper() for marker in ['TODO', 'FIXME', 'XXX', 'HACK', 'BUG']):
+                        analysis['todos'].append({
+                            'line': multiline_start,
+                            'text': comment
+                        })
+                    else:
+                        analysis['comments'].append({
+                            'line': multiline_start,
+                            'text': comment
+                        })
+                multiline_content = []
+            elif in_multiline:
+                multiline_content.append(line.strip('* '))

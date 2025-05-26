@@ -197,19 +197,29 @@ def _format_file_analysis(filename: str, analysis: dict) -> List[str]:
     return sections
 
 def _format_python_file(analysis: dict) -> List[str]:
-    """Format Python-specific file information with better method grouping."""
+    """Format Python-specific file information with conditional detail based on repo size."""
     sections = []
+
+    # Check if this is a large repo (>10K LOC total) - skip detailed code snippets
+    total_loc = analysis.get('_repo_total_loc', 0)
+    skip_details = total_loc > 10000
 
     if analysis.get('classes'):
         sections.append('\nCLASSES:')
         for cls in sorted(analysis['classes'], key=lambda x: x.get('line_number', 0)):
-            sections.append(f"  {cls['name']}:")
-            if 'line_number' in cls:
-                sections.append(f"    Line: {cls['line_number']}")
-            if cls.get('bases'):
-                sections.append(f"    Inherits: {', '.join(cls['bases'])}")
-            if cls.get('docstring'):
-                sections.append(f"    Doc: {cls['docstring'].split(chr(10))[0]}")
+            if skip_details:
+                # Compact format for large repos
+                bases_info = f" extends {', '.join(cls['bases'])}" if cls.get('bases') else ""
+                sections.append(f"  {cls['name']}{bases_info}")
+            else:
+                # Detailed format for small repos
+                sections.append(f"  {cls['name']}:")
+                if 'line_number' in cls:
+                    sections.append(f"    Line: {cls['line_number']}")
+                if cls.get('bases'):
+                    sections.append(f"    Inherits: {', '.join(cls['bases'])}")
+                if cls.get('docstring'):
+                    sections.append(f"    Doc: {cls['docstring'].split(chr(10))[0]}")
 
             # Handle different method types
             if cls.get('methods'):
@@ -247,29 +257,46 @@ def _format_python_file(analysis: dict) -> List[str]:
     if analysis.get('functions'):
         sections.append('\nFUNCTIONS:')
         for func in sorted(analysis['functions'], key=lambda x: x.get('line_number', 0)):
-            sections.append(f"  {func['name']}:")
-            if 'line_number' in func:
-                sections.append(f"    Line: {func['line_number']}")
-            if func.get('args'):
-                # Handle both string and dict arguments
-                args_list = []
-                for arg in func['args']:
-                    if isinstance(arg, dict):
-                        arg_str = f"{arg['name']}: {arg['type']}" if 'type' in arg else arg['name']
-                        args_list.append(arg_str)
+            if skip_details:
+                # Compact format for large repos
+                func_info = f"  {func['name']}("
+                if func.get('args'):
+                    if isinstance(func['args'][0], dict):
+                        args = [arg['name'] for arg in func['args'][:3]]  # Max 3 args
                     else:
-                        args_list.append(arg)
-                sections.append(f"    Args: {', '.join(args_list)}")
-            if func.get('return_type'):
-                sections.append(f"    Returns: {func['return_type']}")
-            if func.get('docstring'):
-                sections.append(f"    Doc: {func['docstring'].split(chr(10))[0]}")
-            if func.get('decorators'):
-                sections.append(f"    Decorators: {', '.join(func['decorators'])}")
-            if func.get('complexity'):
-                sections.append(f"    Complexity: {func['complexity']}")
-            if func.get('is_async'):
-                sections.append("    Async: Yes")
+                        args = func['args'][:3]
+                    if len(func['args']) > 3:
+                        args.append("...")
+                    func_info += ", ".join(args)
+                func_info += ")"
+                if func.get('complexity', 0) > 5:
+                    func_info += f" [Complex: {func['complexity']}]"
+                sections.append(func_info)
+            else:
+                # Detailed format for small repos
+                sections.append(f"  {func['name']}:")
+                if 'line_number' in func:
+                    sections.append(f"    Line: {func['line_number']}")
+                if func.get('args'):
+                    # Handle both string and dict arguments
+                    args_list = []
+                    for arg in func['args']:
+                        if isinstance(arg, dict):
+                            arg_str = f"{arg['name']}: {arg['type']}" if 'type' in arg else arg['name']
+                            args_list.append(arg_str)
+                        else:
+                            args_list.append(arg)
+                    sections.append(f"    Args: {', '.join(args_list)}")
+                if func.get('return_type'):
+                    sections.append(f"    Returns: {func['return_type']}")
+                if func.get('docstring'):
+                    sections.append(f"    Doc: {func['docstring'].split(chr(10))[0]}")
+                if func.get('decorators'):
+                    sections.append(f"    Decorators: {', '.join(func['decorators'])}")
+                if func.get('complexity'):
+                    sections.append(f"    Complexity: {func['complexity']}")
+                if func.get('is_async'):
+                    sections.append("    Async: Yes")
 
     return sections
 

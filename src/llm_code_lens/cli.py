@@ -918,12 +918,28 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         if interactive and (include_paths or exclude_paths):
             # Create a custom file collection function that respects include/exclude paths
             def custom_collect_files(path: Path) -> List[Path]:
-                # Get all files that match the analyzer's supported extensions
+                # Common directories to exclude by default
+                common_excludes = {
+                    'node_modules', '__pycache__', '.git', '.pytest_cache', 'venv', 'env',
+                    '.venv', 'dist', 'build', '.next', '.cache', 'target', '.gradle',
+                    'bin', 'obj', '.vs', '.idea', '.vscode', 'coverage', 'logs'
+                }
+
+                # Use os.walk for better performance and early directory exclusion
                 files = []
-                for file_path in path.rglob('*'):
-                    if (file_path.is_file() and
-                        file_path.suffix.lower() in analyzer.analyzers):
-                        files.append(file_path)
+                for root, dirs, filenames in os.walk(str(path)):
+                    # Skip excluded directories early - modify dirs in place to avoid traversing
+                    dirs[:] = [d for d in dirs if (
+                        d not in common_excludes and  # Skip common excludes
+                        not any(str(Path(root) / d).startswith(str(ep)) for ep in exclude_paths)  # Skip explicit excludes
+                    )]
+
+                    for filename in filenames:
+                        file_path = Path(root) / filename
+
+                        # Quick extension check
+                        if file_path.suffix.lower() in analyzer.analyzers:
+                            files.append(file_path)
 
                 # Apply include/exclude filters
                 filtered_files = []
@@ -934,8 +950,15 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                     should_include = True
                     exclusion_reason = None
 
+                    # Skip if in excluded paths
+                    for exclude_path in exclude_paths:
+                        if str(file_path).startswith(str(exclude_path)):
+                            should_include = False
+                            exclusion_reason = f"Excluded by path: {exclude_path}"
+                            break
+
                     # If we have explicit include paths, file must be in one of them
-                    if include_paths:
+                    if should_include and include_paths:
                         should_include = False
                         for include_path in include_paths:
                             if str(file_path).startswith(str(include_path)):
@@ -943,13 +966,6 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                                 break
                         if not should_include:
                             exclusion_reason = "Not in include paths"
-
-                    # Check if file is in exclude paths
-                    for exclude_path in exclude_paths:
-                        if str(file_path).startswith(str(exclude_path)):
-                            should_include = False
-                            exclusion_reason = f"Excluded by path: {exclude_path}"
-                            break
 
                     if should_include:
                         filtered_files.append(file_path)

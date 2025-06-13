@@ -472,15 +472,43 @@ class MenuState:
             self.update_in_progress = False
 
     def _auto_select_files(self) -> None:
-        """Auto-select all files and folders that are not ignored by gitignore or common excludes."""
+        """Auto-select relevant code files and important folders that are not ignored by gitignore or common excludes."""
         selected_count = 0
+
+        # Define relevant code file extensions
+        code_extensions = {
+            '.py', '.js', '.jsx', '.ts', '.tsx', '.vue', '.svelte',  # Frontend/Python
+            '.java', '.kt', '.scala', '.groovy',  # JVM languages
+            '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp',  # C/C++
+            '.cs', '.vb', '.fs',  # .NET languages
+            '.go', '.rs', '.rb', '.php', '.swift', '.m', '.mm',  # Other languages
+            '.sql', '.graphql', '.proto',  # Data/API
+            '.html', '.css', '.scss', '.sass', '.less', '.styl',  # Web
+            '.json', '.yaml', '.yml', '.toml', '.xml', '.ini', '.cfg', '.conf',  # Config
+            '.md', '.rst', '.txt',  # Documentation
+            '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',  # Scripts
+            '.dockerfile', '.makefile', '.gradle', '.cmake'  # Build files
+        }
+
+        # Important directories that should be included (if they exist and aren't excluded)
+        important_dirs = {
+            'src', 'lib', 'components', 'pages', 'utils', 'helpers', 'services',
+            'api', 'models', 'views', 'controllers', 'routes', 'middleware',
+            'config', 'scripts', 'tests', 'test', 'spec', 'docs', 'documentation'
+        }
 
         try:
             # Walk through all files and directories
             for root, dirs, files in os.walk(self.root_path):
                 root_path = Path(root)
 
-                # Process directories first
+                # Skip deep nesting (more than 5 levels deep to avoid selecting too much)
+                relative_depth = len(root_path.relative_to(self.root_path).parts)
+                if relative_depth > 5:
+                    dirs.clear()  # Don't recurse deeper
+                    continue
+
+                # Process directories - be selective about which ones to include
                 for dir_name in dirs[:]:  # Use slice copy to allow modification during iteration
                     dir_path = root_path / dir_name
 
@@ -489,11 +517,18 @@ class MenuState:
                         dirs.remove(dir_name)  # Don't recurse into excluded directories
                         continue
 
-                    # Auto-select this directory
-                    self.selected_items.add(str(dir_path))
-                    selected_count += 1
+                    # Only auto-select directories that are important or at root level
+                    should_select_dir = (
+                        relative_depth == 0 or  # Root level directories
+                        dir_name.lower() in important_dirs or  # Important directory names
+                        any(dir_name.lower().startswith(prefix) for prefix in ['src', 'lib', 'app', 'web'])  # Common prefixes
+                    )
 
-                # Process files in current directory
+                    if should_select_dir:
+                        self.selected_items.add(str(dir_path))
+                        selected_count += 1
+
+                # Process files - only select relevant code files
                 for file_name in files:
                     file_path = root_path / file_name
 
@@ -501,15 +536,30 @@ class MenuState:
                     if self.is_excluded(file_path):
                         continue
 
-                    # Auto-select this file
-                    self.selected_items.add(str(file_path))
-                    selected_count += 1
+                    # Check if it's a relevant code file
+                    file_ext = file_path.suffix.lower()
+                    is_relevant_file = (
+                        file_ext in code_extensions or
+                        file_name.lower() in {
+                            'readme', 'readme.md', 'readme.txt', 'license', 'license.txt',
+                            'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+                            'requirements.txt', 'setup.py', 'pyproject.toml', 'pipfile', 'poetry.lock',
+                            'dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
+                            'makefile', 'cmake', 'build.gradle', 'pom.xml', 'cargo.toml',
+                            '.gitignore', '.env.example', '.env.template'
+                        } or
+                        any(file_name.lower().startswith(prefix) for prefix in ['readme', 'license', 'changelog', 'contributing'])
+                    )
+
+                    if is_relevant_file:
+                        self.selected_items.add(str(file_path))
+                        selected_count += 1
 
             # Update status message
             if selected_count > 0:
-                self.status_message = f"Auto-selected {selected_count} files and folders (excluding ignored items)"
+                self.status_message = f"Auto-selected {selected_count} relevant files and folders (excluding ignored items)"
             else:
-                self.status_message = "No files found to auto-select"
+                self.status_message = "No relevant files found to auto-select"
 
         except Exception as e:
             self.status_message = f"Error during auto-selection: {str(e)}"

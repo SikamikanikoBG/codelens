@@ -610,7 +610,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         
         for i in range(visible_count):
             idx = i + state.scroll_offset
-            if idx >= len(self.visible_items):
+            if idx >= len(state.visible_items):
                 break
                 
             path, depth = state.visible_items[idx]

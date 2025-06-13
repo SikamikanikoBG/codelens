@@ -215,10 +215,6 @@ class MenuState:
             
         return False
         
-    # Remove this entire method - no longer needed
-        
-    # This method was already replaced above - remove this duplicate
-    
     def get_current_item(self) -> Optional[Path]:
         """Get the currently selected item."""
         if 0 <= self.cursor_pos < len(self.visible_items):
@@ -246,16 +242,10 @@ class MenuState:
         if self.cursor_pos >= len(self.visible_items) and len(self.visible_items) > 0:
             self.cursor_pos = len(self.visible_items) - 1
     
-    # Remove this entire method - no longer needed
-            
-    # Remove this entire method - no longer needed
-    
-    # Remove this entire method - no longer needed
-    
-    # Remove this entire method - no longer needed
-
     def _build_item_list(self, path: Path, depth: int) -> None:
         """Fast build of visible items - Norton Commander style."""
+        print(f"Processing path: {path}")  # Debugging output
+        
         if path != self.root_path:  # Don't add root to list
             self.visible_items.append((path, depth))
         
@@ -267,6 +257,7 @@ class MenuState:
                               key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
                 
                 for item in items:
+                    print(f"Adding item: {item}")  # Debugging output
                     self._build_item_list(item, depth + 1)
             except (PermissionError, OSError):
                 pass
@@ -568,8 +559,6 @@ def draw_menu(stdscr, state: MenuState) -> None:
     curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)   # Options
     curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_RED)    # Active section
     
-    # Remove scanning screen - no longer needed
-    
     # Calculate layout
     options_height = 10  # Height of options section
     files_height = max_y - options_height - 4  # Height of files section (minus header/footer)
@@ -621,7 +610,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
         
         for i in range(visible_count):
             idx = i + state.scroll_offset
-            if idx >= len(state.visible_items):
+            if idx >= len(self.visible_items):
                 break
                 
             path, depth = state.visible_items[idx]
@@ -880,8 +869,6 @@ def handle_input(key: int, state: MenuState) -> bool:
             return False
         return False
         
-    # Remove scanning handling - no longer needed
-        
     # Handle editing mode separately
     if state.editing_option:
         if key == 27:  # Escape key
@@ -914,7 +901,6 @@ def handle_input(key: int, state: MenuState) -> bool:
         state.active_section = 'files'
     elif key == ord('o') or key == ord('O'):
         state.active_section = 'options'
-    # Removed Ctrl+Space shortcut as Space now does full selection
         
     # Files section controls
     if state.active_section == 'files':
@@ -1013,8 +999,7 @@ def handle_input(key: int, state: MenuState) -> bool:
         if state.active_section == 'options' and state.option_cursor >= 6 and state.option_cursor < 6 + len(state.options['exclude_patterns']):
             pattern_index = state.option_cursor - 6
             state.remove_exclude_pattern(pattern_index)
-    # Insert key handling removed
-        
+    
     return False
 
 

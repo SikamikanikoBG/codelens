@@ -32,3 +32,7 @@ _crawler/
 .coverage
 .aider*
 run_aider.bat
+PKG-INFO
+docs/cheatsheet_llmcl_aider_opus.html
+docs/cheatsheet_llmcl_aider_sonnet.html
+docs/cheatsheet_llmcl_aider.html

@@ -1,434 +1,371 @@
-import re
-import os
-import pyodbc
 from pathlib import Path
 from typing import Dict, List, Optional
+from .base import BaseAnalyzer
+import re
 
-class SQLServerAnalyzer:
-    """SQL Server code analyzer for stored procedures and views."""
+class SQLServerAnalyzer(BaseAnalyzer):
+    """SQL Server code analyzer with regex-based parsing."""
     
     def __init__(self):
-        self.conn = None
-        self.cursor = None
-        
-    def connect(self, connection_string: Optional[str] = None) -> None:
-        """
-        Connect to SQL Server using either provided connection string or environment variables.
-        
-        Args:
-            connection_string: Optional connection string. If not provided, uses environment variables.
-        """
-        try:
-            if connection_string:
-                self.conn = pyodbc.connect(connection_string)
-            else:
-                # Use environment variables
-                server = os.getenv('MSSQL_SERVER')
-                username = os.getenv('MSSQL_USERNAME')
-                password = os.getenv('MSSQL_PASSWORD')
-                
-                if not server:
-                    raise ValueError("No server specified. Provide connection string or set MSSQL_SERVER environment variable")
-                
-                # Build connection string
-                conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server}'
-                if username and password:
-                    conn_str += f';UID={username};PWD={password}'
-                else:
-                    conn_str += ';Trusted_Connection=yes'
-                
-                self.conn = pyodbc.connect(conn_str)
-            
-            self.cursor = self.conn.cursor()
-            
-        except Exception as e:
-            raise ConnectionError(f"Failed to connect to SQL Server: {str(e)}")
+        super().__init__()
     
-    def list_databases(self) -> List[str]:
-        """List all accessible databases."""
-        if not self.cursor:
-            raise ConnectionError("Not connected to SQL Server")
-        
-        self.cursor.execute("SELECT name FROM sys.databases WHERE database_id > 4")  # Skip system DBs
-        return [row.name for row in self.cursor.fetchall()]
-
-    def analyze_database(self, database: str) -> Dict:
-        """
-        Analyze a specific database.
-        
-        Args:
-            database: Name of the database to analyze
-        
-        Returns:
-            Dict containing analysis of stored procedures, views, and functions
-        """
-        if not self.cursor:
-            raise ConnectionError("Not connected to SQL Server")
-        
-        # Switch to specified database
-        self.cursor.execute(f"USE [{database}]")
-        
-        return {
-            'stored_procedures': self._analyze_stored_procedures(),
-            'views': self._analyze_views(),
-            'functions': self._analyze_functions()
-        }
-
-    def _analyze_stored_procedures(self) -> List[Dict]:
-        """Analyze stored procedures in current database."""
-        self.cursor.execute("""
-            SELECT 
-                OBJECT_SCHEMA_NAME(p.object_id) as schema_name,
-                p.name,
-                m.definition,
-                p.create_date,
-                p.modify_date
-            FROM sys.procedures p
-            INNER JOIN sys.sql_modules m ON p.object_id = m.object_id
-            ORDER BY schema_name, p.name
-        """)
-        
-        procedures = []
-        for row in self.cursor.fetchall():
-            proc_def = row.definition
-            
-            # Analyze the procedure
-            proc_analysis = {
-                'schema': row.schema_name,
-                'name': row.name,
-                'definition': proc_def,
-                'metrics': {
-                    'lines': len(proc_def.splitlines()),
-                    'complexity': self._estimate_complexity(proc_def)
-                },
-                'parameters': self._extract_parameters(proc_def),
-                'dependencies': self._extract_dependencies(proc_def),
-                'todos': [],
-                'comments': []
-            }
-            
-            # Extract comments and TODOs
-            comments, todos = self._extract_comments_and_todos(proc_def)
-            proc_analysis['comments'] = comments
-            proc_analysis['todos'] = todos
-            
-            procedures.append(proc_analysis)
-        
-        return procedures
-    
-    def _analyze_views(self) -> List[Dict]:
-        """Analyze views in current database."""
-        self.cursor.execute("""
-            SELECT 
-                OBJECT_SCHEMA_NAME(v.object_id) as schema_name,
-                v.name,
-                m.definition,
-                v.create_date,
-                v.modify_date
-            FROM sys.views v
-            INNER JOIN sys.sql_modules m ON v.object_id = m.object_id
-            ORDER BY schema_name, v.name
-        """)
-        
-        views = []
-        for row in self.cursor.fetchall():
-            view_def = row.definition
-            
-            # Analyze the view
-            view_analysis = {
-                'schema': row.schema_name,
-                'name': row.name,
-                'definition': view_def,
-                'metrics': {
-                    'lines': len(view_def.splitlines()),
-                    'complexity': self._estimate_complexity(view_def)
-                },
-                'dependencies': self._extract_dependencies(view_def),
-                'todos': [],
-                'comments': []
-            }
-            
-            # Extract comments and TODOs
-            comments, todos = self._extract_comments_and_todos(view_def)
-            view_analysis['comments'] = comments
-            view_analysis['todos'] = todos
-            
-            views.append(view_analysis)
-        
-        return views
-    
-    def _analyze_functions(self) -> List[Dict]:
-        """Analyze functions in current database."""
-        self.cursor.execute("""
-            SELECT 
-                OBJECT_SCHEMA_NAME(f.object_id) as schema_name,
-                f.name,
-                m.definition,
-                f.create_date,
-                f.modify_date,
-                f.type
-            FROM sys.objects f
-            INNER JOIN sys.sql_modules m ON f.object_id = m.object_id
-            WHERE f.type IN ('FN', 'IF', 'TF')  -- Scalar, Inline Table, Table-valued
-            ORDER BY schema_name, f.name
-        """)
-        
-        functions = []
-        for row in self.cursor.fetchall():
-            func_def = row.definition
-            
-            # Analyze the function
-            func_analysis = {
-                'schema': row.schema_name,
-                'name': row.name,
-                'definition': func_def,
-                'metrics': {
-                    'lines': len(func_def.splitlines()),
-                    'complexity': self._estimate_complexity(func_def)
-                },
-                'parameters': self._extract_parameters(func_def),
-                'dependencies': self._extract_dependencies(func_def),
-                'todos': [],
-                'comments': []
-            }
-            
-            # Extract comments and TODOs
-            comments, todos = self._extract_comments_and_todos(func_def)
-            func_analysis['comments'] = comments
-            func_analysis['todos'] = todos
-            
-            functions.append(func_analysis)
-        
-        return functions
-
     def analyze_file(self, file_path: Path) -> dict:
         """Analyze a SQL file."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        analysis = {
-            'type': 'sql',
-            'metrics': {
-                'loc': len(content.splitlines()),
-                'complexity': self._estimate_complexity(content)
-            },
-            'objects': [],
-            'parameters': [],
-            'comments': [],
-            'todos': [],
-            'dependencies': self._extract_dependencies(content)
-        }
-        
-        # Extract SQL objects
-        objects = self._extract_sql_objects(content)
-        if objects:
-            analysis['objects'] = objects
-        
-        # Extract parameters with comments
-        params = self._extract_parameters(content)
-        if params:
-            analysis['parameters'] = params
-        
-        # Extract comments and TODOs
-        comments, todos = self._extract_comments_and_todos(content)
-        analysis['comments'] = comments
-        analysis['todos'] = todos
-        
-        return analysis
-
-    def __del__(self):
-        """Cleanup database connections."""
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
-
-    # Rest of the existing methods remain the same
-    def _extract_sql_objects(self, content: str) -> List[dict]:
-        """Extract SQL objects like procedures, functions, and views."""
-        objects = []
-        
-        # Match CREATE/ALTER statements
-        patterns = {
-            'procedure': r'CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE\s+([^\s]+)',
-            'function': r'CREATE\s+(?:OR\s+ALTER\s+)?FUNCTION\s+([^\s]+)',
-            'view': r'CREATE\s+(?:OR\s+ALTER\s+)?VIEW\s+([^\s]+)'
-        }
-        
-        for obj_type, pattern in patterns.items():
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                name = match.group(1)
-                # Find the object's body
-                start_pos = match.start()
-                # Look for GO or end of file
-                end_match = re.search(r'\bGO\b', content[start_pos:], re.IGNORECASE)
-                if end_match:
-                    end_pos = start_pos + end_match.start()
-                    definition = content[start_pos:end_pos].strip()
-                else:
-                    definition = content[start_pos:].strip()
-                
-                objects.append({
-                    'type': obj_type,
-                    'name': name,
-                    'definition': definition,
-                    'loc': len(definition.splitlines()),
-                    'complexity': self._estimate_complexity(definition)
-                })
-        
-        return objects
-
-    def _extract_parameters(self, content: str) -> List[dict]:
-        """Extract parameters from procedure or function definitions."""
-        params = []
-        # Find the procedure declaration
-        proc_match = re.search(
-            r'CREATE\s+(?:OR\s+ALTER\s+)?(?:PROCEDURE|FUNCTION)\s+([^\s]+)([\s\S]+?)AS\b',
-            content,
-            re.IGNORECASE
-        )
-        
-        if proc_match:
-            param_section = proc_match.group(2)
-            # Extract each parameter line, handling multiline declarations
-            param_lines = re.findall(
-                r'@\w+\s+[^,@]+(?:\s*=\s*[^,]+)?(?=\s*,|\s*AS\b|\s*$)',
-                param_section,
-                re.IGNORECASE | re.DOTALL
-            )
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
             
-            for param_line in param_lines:
-                # Extract individual parameter components
-                param_match = re.match(
-                    r'@(\w+)\s+([^=\s]+(?:\([^)]*\))?)\s*(?:=\s*([^,\s][^,]*)?)?',
-                    param_line.strip()
-                )
-                
-                if param_match:
-                    name, data_type, default = param_match.groups()
-                    param_info = {
-                        'name': name,
-                        'data_type': data_type.strip()
-                    }
-                    
-                    if default:
-                        param_info['default'] = default.strip()
-                    
-                    # Look for inline comment on the same line
-                    comment_match = re.search(r'--\s*(.*?)(?:\r?\n|$)', param_line)
-                    if comment_match:
-                        param_info['description'] = comment_match.group(1).strip()
-                    
-                    params.append(param_info)
+            analysis = {
+                'type': 'sql',
+                'procedures': [],
+                'functions': [],
+                'tables': [],
+                'views': [],
+                'triggers': [],
+                'parameters': [],
+                'dependencies': [],
+                'comments': [],
+                'todos': [],
+                'metrics': {
+                    'loc': len(content.splitlines()),
+                    'procedures': 0,
+                    'functions': 0,
+                    'tables': 0,
+                    'views': 0,
+                    'triggers': 0,
+                    'complexity': 0
+                }
+            }
+            
+            # Extract SQL constructs
+            self._extract_procedures(content, analysis)
+            self._extract_functions(content, analysis)
+            self._extract_tables(content, analysis)
+            self._extract_views(content, analysis)
+            self._extract_triggers(content, analysis)
+            self._extract_comments(content, analysis)
+            
+            # Update metrics
+            analysis['metrics']['procedures'] = len(analysis['procedures'])
+            analysis['metrics']['functions'] = len(analysis['functions'])
+            analysis['metrics']['tables'] = len(analysis['tables'])
+            analysis['metrics']['views'] = len(analysis['views'])
+            analysis['metrics']['triggers'] = len(analysis['triggers'])
+            analysis['metrics']['complexity'] = self._calculate_complexity(content)
+            
+            return analysis
+            
+        except Exception as e:
+            return {
+                'type': 'sql',
+                'errors': [{'type': 'parse_error', 'text': str(e)}],
+                'metrics': {'loc': 0, 'procedures': 0, 'functions': 0, 'tables': 0, 'views': 0, 'triggers': 0, 'complexity': 0}
+            }
+    
+    def _extract_procedures(self, content: str, analysis: dict):
+        """Extract stored procedures."""
+        # Pattern for CREATE PROCEDURE
+        proc_pattern = r'CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE\s+(\w+\.?\w*)\s*(?:\(([^)]*)\))?'
+        matches = re.finditer(proc_pattern, content, re.IGNORECASE | re.MULTILINE)
         
-        # Update parameter documentation from nearby comments
-        lines = content.splitlines()
-        for i, line in enumerate(lines):
-            if '--' in line and any(param['name'] in line for param in params):
-                comment = line[line.index('--')+2:].strip()
-                param_name = next(
-                    (param['name'] for param in params if param['name'] in line),
-                    None
-                )
-                if param_name:
-                    param = next(p for p in params if p['name'] == param_name)
-                    if 'description' not in param:
-                        param['description'] = comment
+        procedures = []
+        for match in matches:
+            proc_name = match.group(1)
+            params_text = match.group(2) or ''
+            
+            # Extract line number
+            line_number = content[:match.start()].count('\n') + 1
+            
+            # Parse parameters
+            parameters = self._parse_parameters(params_text)
+            
+            # Extract procedure body for analysis
+            proc_start = match.end()
+            proc_body = self._extract_block_body(content, proc_start)
+            
+            procedures.append({
+                'name': proc_name,
+                'line_number': line_number,
+                'parameters': parameters,
+                'complexity': self._calculate_block_complexity(proc_body),
+                'dependencies': self._extract_dependencies(proc_body)
+            })
         
-        return params
-
-    def _extract_dependencies(self, content: str) -> List[str]:
-        """Extract table and view dependencies."""
-        deps = set()
+        analysis['procedures'] = procedures
+    
+    def _extract_functions(self, content: str, analysis: dict):
+        """Extract user-defined functions."""
+        func_pattern = r'CREATE\s+(?:OR\s+ALTER\s+)?FUNCTION\s+(\w+\.?\w*)\s*\(([^)]*)\)'
+        matches = re.finditer(func_pattern, content, re.IGNORECASE | re.MULTILINE)
         
-        # Define patterns for table references
-        patterns = [
-            # FROM, JOIN, UPDATE, etc. followed by table name
-            r'(?:FROM|JOIN|INTO|UPDATE)\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)\b(?!\s*[=@])',
-            # INSERT INTO pattern
-            r'INSERT\s+INTO\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)\b',
-            # REFERENCES in constraints
-            r'REFERENCES\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)\b'
-        ]
+        functions = []
+        for match in matches:
+            func_name = match.group(1)
+            params_text = match.group(2) or ''
+            
+            line_number = content[:match.start()].count('\n') + 1
+            parameters = self._parse_parameters(params_text)
+            
+            func_start = match.end()
+            func_body = self._extract_block_body(content, func_start)
+            
+            functions.append({
+                'name': func_name,
+                'line_number': line_number,
+                'parameters': parameters,
+                'return_type': self._extract_return_type(func_body),
+                'complexity': self._calculate_block_complexity(func_body)
+            })
         
-        # Define words that should not be treated as table names
-        excluded_words = {
-            'null', 'select', 'where', 'group', 'order', 'having',
-            'exists', 'between', 'like', 'in', 'is', 'not', 'and', 'or',
-            'operation', 'existing'  # Add common variables
-        }
+        analysis['functions'] = functions
+    
+    def _extract_tables(self, content: str, analysis: dict):
+        """Extract table definitions."""
+        table_pattern = r'CREATE\s+TABLE\s+(\w+\.?\w*)\s*\('
+        matches = re.finditer(table_pattern, content, re.IGNORECASE | re.MULTILINE)
         
-        for pattern in patterns:
-            for match in re.finditer(pattern, content, re.IGNORECASE):
-                table_name = match.group(1).strip()
-                if table_name.lower() not in excluded_words:
-                    deps.add(table_name)
+        tables = []
+        for match in matches:
+            table_name = match.group(1)
+            line_number = content[:match.start()].count('\n') + 1
+            
+            # Extract table definition
+            table_start = match.start()
+            table_body = self._extract_block_body(content, table_start, 'CREATE TABLE')
+            columns = self._extract_table_columns(table_body)
+            
+            tables.append({
+                'name': table_name,
+                'line_number': line_number,
+                'columns': columns
+            })
         
-        return sorted(list(deps))
-
-    def _extract_comments_and_todos(self, content: str) -> tuple:
-        """Extract comments and TODOs from SQL code."""
+        analysis['tables'] = tables
+    
+    def _extract_views(self, content: str, analysis: dict):
+        """Extract view definitions."""
+        view_pattern = r'CREATE\s+(?:OR\s+ALTER\s+)?VIEW\s+(\w+\.?\w*)'
+        matches = re.finditer(view_pattern, content, re.IGNORECASE | re.MULTILINE)
+        
+        views = []
+        for match in matches:
+            view_name = match.group(1)
+            line_number = content[:match.start()].count('\n') + 1
+            
+            views.append({
+                'name': view_name,
+                'line_number': line_number
+            })
+        
+        analysis['views'] = views
+    
+    def _extract_triggers(self, content: str, analysis: dict):
+        """Extract trigger definitions."""
+        trigger_pattern = r'CREATE\s+(?:OR\s+ALTER\s+)?TRIGGER\s+(\w+\.?\w*)'
+        matches = re.finditer(trigger_pattern, content, re.IGNORECASE | re.MULTILINE)
+        
+        triggers = []
+        for match in matches:
+            trigger_name = match.group(1)
+            line_number = content[:match.start()].count('\n') + 1
+            
+            triggers.append({
+                'name': trigger_name,
+                'line_number': line_number
+            })
+        
+        analysis['triggers'] = triggers
+    
+    def _extract_comments(self, content: str, analysis: dict):
+        """Extract comments and TODOs."""
         comments = []
         todos = []
         
-        # Match inline comments and block comments
-        patterns = [
-            (r'--([^\n]+)', False),  # Inline comments
-            (r'/\*[\s\S]*?\*/', True)  # Block comments
-        ]
-        
-        for pattern, is_multiline in patterns:
-            for match in re.finditer(pattern, content):
-                comment = match.group()
-                if is_multiline:
-                    comment = comment.strip('/*').strip('*/')
-                else:
-                    comment = comment.strip('--')
-                comment = comment.strip()
+        lines = content.splitlines()
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            
+            # Single line comments
+            if stripped.startswith('--'):
+                comment_text = stripped[2:].strip()
                 
-                # Skip empty comments and parameter comments
-                if not comment or comment.startswith('@'):
-                    continue
-                
-                line_num = content[:match.start()].count('\n') + 1
-                
-                if any(marker in comment.upper() 
-                    for marker in ['TODO', 'FIXME', 'XXX']):
+                if any(marker in comment_text.upper() for marker in ['TODO', 'FIXME', 'XXX', 'HACK', 'BUG']):
                     todos.append({
-                        'text': comment,
-                        'line': line_num
+                        'line': i,
+                        'text': comment_text,
+                        'type': 'todo'
                     })
                 else:
                     comments.append({
-                        'text': comment,
-                        'line': line_num
+                        'line': i,
+                        'text': comment_text
+                    })
+            
+            # Multi-line comments
+            elif '/*' in stripped:
+                # Simple handling of /* */ comments
+                comment_start = stripped.find('/*')
+                if '*/' in stripped:
+                    comment_end = stripped.find('*/')
+                    comment_text = stripped[comment_start+2:comment_end].strip()
+                    
+                    if any(marker in comment_text.upper() for marker in ['TODO', 'FIXME', 'XXX']):
+                        todos.append({
+                            'line': i,
+                            'text': comment_text,
+                            'type': 'todo'
+                        })
+                    else:
+                        comments.append({
+                            'line': i,
+                            'text': comment_text
+                        })
+        
+        analysis['comments'] = comments
+        analysis['todos'] = todos
+    
+    def _parse_parameters(self, params_text: str) -> List[dict]:
+        """Parse SQL parameters."""
+        if not params_text.strip():
+            return []
+        
+        parameters = []
+        # Split by comma, but be careful of nested parentheses
+        param_parts = re.split(r',(?![^()]*\))', params_text)
+        
+        for param in param_parts:
+            param = param.strip()
+            if param:
+                # Parse parameter: @name TYPE [= default]
+                parts = param.split()
+                if len(parts) >= 2:
+                    param_name = parts[0]
+                    param_type = parts[1]
+                    
+                    # Look for default value
+                    default_value = None
+                    if '=' in param:
+                        default_value = param.split('=')[1].strip()
+                    
+                    parameters.append({
+                        'name': param_name,
+                        'type': param_type,
+                        'default': default_value
                     })
         
-        return comments, todos
-
-    def _estimate_complexity(self, content: str) -> int:
-        """Estimate SQL complexity based on various factors."""
+        return parameters
+    
+    def _extract_block_body(self, content: str, start_pos: int, block_type: str = None) -> str:
+        """Extract the body of a SQL block (procedure, function, etc.)."""
+        # Find the next END statement or end of file
+        remaining_content = content[start_pos:]
+        
+        # Look for AS keyword followed by body
+        as_match = re.search(r'\bAS\b', remaining_content, re.IGNORECASE)
+        if as_match:
+            body_start = start_pos + as_match.end()
+            # Find matching END
+            body_content = content[body_start:]
+            
+            # Simple approach: find the next standalone END
+            end_match = re.search(r'\bEND\b', body_content, re.IGNORECASE)
+            if end_match:
+                return body_content[:end_match.start()]
+            else:
+                # Return next 1000 characters if no END found
+                return body_content[:1000]
+        
+        return remaining_content[:500]  # Fallback
+    
+    def _extract_dependencies(self, body: str) -> List[str]:
+        """Extract table/view dependencies from SQL body."""
+        dependencies = set()
+        
+        # Look for FROM, JOIN, INTO, UPDATE, DELETE patterns
+        patterns = [
+            r'\bFROM\s+(\w+\.?\w*)',
+            r'\bJOIN\s+(\w+\.?\w*)',
+            r'\bINTO\s+(\w+\.?\w*)',
+            r'\bUPDATE\s+(\w+\.?\w*)',
+            r'\bDELETE\s+FROM\s+(\w+\.?\w*)'
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, body, re.IGNORECASE)
+            dependencies.update(matches)
+        
+        return sorted(list(dependencies))
+    
+    def _extract_return_type(self, body: str) -> Optional[str]:
+        """Extract return type from function body."""
+        returns_match = re.search(r'RETURNS\s+(\w+(?:\(\d+(?:,\s*\d+)?\))?)', body, re.IGNORECASE)
+        if returns_match:
+            return returns_match.group(1)
+        return None
+    
+    def _extract_table_columns(self, table_body: str) -> List[dict]:
+        """Extract column definitions from CREATE TABLE statement."""
+        columns = []
+        
+        # Find the column definitions between parentheses
+        paren_start = table_body.find('(')
+        paren_end = table_body.rfind(')')
+        
+        if paren_start != -1 and paren_end != -1:
+            columns_text = table_body[paren_start+1:paren_end]
+            
+            # Split by comma and parse each column
+            column_lines = columns_text.split(',')
+            
+            for line in column_lines:
+                line = line.strip()
+                if line and not line.upper().startswith('CONSTRAINT'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        col_name = parts[0]
+                        col_type = parts[1]
+                        
+                        # Check for NOT NULL, PRIMARY KEY, etc.
+                        nullable = 'NOT NULL' not in line.upper()
+                        is_primary = 'PRIMARY KEY' in line.upper()
+                        
+                        columns.append({
+                            'name': col_name,
+                            'type': col_type,
+                            'nullable': nullable,
+                            'is_primary_key': is_primary
+                        })
+        
+        return columns
+    
+    def _calculate_complexity(self, content: str) -> int:
+        """Calculate overall complexity of SQL file."""
         complexity = 0
-        content_lower = content.lower()
         
-        # Control flow complexity
-        complexity += content_lower.count('if ') * 2
-        complexity += content_lower.count('else ') * 2
-        complexity += content_lower.count('case ') * 2
-        complexity += content_lower.count('while ') * 3
-        complexity += content_lower.count('cursor') * 4
+        # Count control flow statements
+        complexity += len(re.findall(r'\bIF\b', content, re.IGNORECASE))
+        complexity += len(re.findall(r'\bWHILE\b', content, re.IGNORECASE))
+        complexity += len(re.findall(r'\bCASE\b', content, re.IGNORECASE))
+        complexity += len(re.findall(r'\bTRY\b', content, re.IGNORECASE))
+        complexity += len(re.findall(r'\bCATCH\b', content, re.IGNORECASE))
         
-        # Query complexity
-        complexity += content_lower.count('join ') * 2
-        complexity += content_lower.count('where ') * 2
-        complexity += content_lower.count('group by ') * 2
-        complexity += content_lower.count('having ') * 3
-        complexity += content_lower.count('union ') * 3
+        # Count joins (complexity indicators)
+        complexity += len(re.findall(r'\bJOIN\b', content, re.IGNORECASE))
         
-        # Transaction complexity
-        complexity += content_lower.count('transaction') * 2
-        complexity += content_lower.count('try') * 2
-        complexity += content_lower.count('catch') * 2
+        return complexity
+    
+    def _calculate_block_complexity(self, body: str) -> int:
+        """Calculate complexity of a specific SQL block."""
+        complexity = 1  # Base complexity
+        
+        # Count control flow statements
+        complexity += body.upper().count('IF ')
+        complexity += body.upper().count('WHILE ')
+        complexity += body.upper().count('CASE ')
+        complexity += body.upper().count('TRY')
+        complexity += body.upper().count('CATCH')
+        complexity += body.upper().count('JOIN ')
+        complexity += body.upper().count('UNION')
+        complexity += body.upper().count('EXISTS')
         
         return complexity

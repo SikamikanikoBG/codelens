@@ -918,74 +918,72 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         if interactive and (include_paths or exclude_paths):
             # Create a custom file collection function that respects include/exclude paths
             def custom_collect_files(path: Path) -> List[Path]:
-                # Common directories to exclude by default
-                common_excludes = {
-                    'node_modules', '__pycache__', '.git', '.pytest_cache', 'venv', 'env',
-                    '.venv', 'dist', 'build', '.next', '.cache', 'target', '.gradle',
-                    'bin', 'obj', '.vs', '.idea', '.vscode', 'coverage', 'logs'
-                }
-
-                # Use os.walk for better performance and early directory exclusion
+                from .utils.gitignore import FastPathFilter
+                
+                # Initialize ultra-fast path filter with custom patterns
+                custom_patterns = list(exclude) if exclude else []
+                path_filter = FastPathFilter(path, custom_patterns)
+                
                 files = []
+                supported_extensions = set(analyzer.analyzers.keys())
+                
+                # Ultra-fast collection with early directory pruning
                 for root, dirs, filenames in os.walk(str(path)):
-                    # Skip excluded directories early - modify dirs in place to avoid traversing
+                    root_path = Path(root)
+                    
+                    # Early directory pruning - check both common excludes and explicit excludes
                     dirs[:] = [d for d in dirs if (
-                        d not in common_excludes and  # Skip common excludes
-                        not any(str(Path(root) / d).startswith(str(ep)) for ep in exclude_paths)  # Skip explicit excludes
+                        not path_filter.should_ignore_directory(root_path / d) and
+                        not any(str(root_path / d).startswith(str(ep)) for ep in exclude_paths)
                     )]
-
+                    
+                    # Process files in current directory
                     for filename in filenames:
-                        file_path = Path(root) / filename
+                        file_path = root_path / filename
+                        
+                        # Quick extension check first (fastest operation)
+                        if file_path.suffix.lower() not in supported_extensions:
+                            continue
+                            
+                        files.append(file_path)
 
-                        # Quick extension check
-                        if file_path.suffix.lower() in analyzer.analyzers:
-                            files.append(file_path)
-
-                # Apply include/exclude filters
+                # Apply include/exclude filters efficiently
                 filtered_files = []
                 excluded_files = []
 
                 for file_path in files:
-                    # Check if file should be included based on interactive selection
                     should_include = True
                     exclusion_reason = None
 
-                    # Skip if in excluded paths
-                    for exclude_path in exclude_paths:
-                        if str(file_path).startswith(str(exclude_path)):
-                            should_include = False
-                            exclusion_reason = f"Excluded by path: {exclude_path}"
-                            break
-
-                    # If we have explicit include paths, file must be in one of them
-                    if should_include and include_paths:
+                    # Check path filters (gitignore + custom patterns)
+                    if path_filter.should_ignore_file(file_path):
                         should_include = False
-                        for include_path in include_paths:
-                            if str(file_path).startswith(str(include_path)):
-                                should_include = True
-                                break
-                        if not should_include:
-                            exclusion_reason = "Not in include paths"
+                        exclusion_reason = "Matched ignore patterns"
+                    elif any(str(file_path).startswith(str(ep)) for ep in exclude_paths):
+                        should_include = False
+                        exclusion_reason = "Explicitly excluded path"
+                    elif include_paths and not any(str(file_path).startswith(str(ip)) for ip in include_paths):
+                        should_include = False
+                        exclusion_reason = "Not in include paths"
 
                     if should_include:
                         filtered_files.append(file_path)
                     else:
                         excluded_files.append((str(file_path), exclusion_reason))
 
-                # Log verification information if debug mode is enabled
+                # Debug output
                 if debug:
-                    console.print(f"[blue]File collection verification:[/]")
+                    console.print(f"[blue]Ultra-fast file collection results:[/]")
                     console.print(f"[blue]- Total files found: {len(files)}[/]")
                     console.print(f"[blue]- Files included: {len(filtered_files)}[/]")
                     console.print(f"[blue]- Files excluded: {len(excluded_files)}[/]")
 
-                    # Log a sample of excluded files (up to 5) with reasons
-                    if excluded_files and len(excluded_files) > 0:
-                        console.print("[blue]Sample of excluded files:[/]")
-                        for i, (file, reason) in enumerate(excluded_files[:5]):
-                            console.print(f"[blue]  {i+1}. {file} - {reason}[/]")
-                        if len(excluded_files) > 5:
-                            console.print(f"[blue]  ... and {len(excluded_files) - 5} more[/]")
+                    if excluded_files:
+                        console.print("[blue]Sample excluded files:[/]")
+                        for i, (file, reason) in enumerate(excluded_files[:3]):
+                            console.print(f"[blue]  {i+1}. {Path(file).name} - {reason}[/]")
+                        if len(excluded_files) > 3:
+                            console.print(f"[blue]  ... and {len(excluded_files) - 3} more[/]")
 
                 return filtered_files
 

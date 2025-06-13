@@ -1,12 +1,16 @@
 name: codelens-dev
-# Version 0.5.4
+# Version 0.5.4 - Ultra-fast Tree-sitter edition
 channels:
-  - conda-forge  # Added conda-forge for pyodbc
+  - conda-forge  # Primary channel for most packages
   - defaults
 dependencies:
   # Base Python and core dependencies
   - python=3.10
   - pip
+  
+  # Core analysis dependencies
+  - tree-sitter>=0.20.0  # Ultra-fast parsing engine
+  
   # Optional dependencies
   - pyodbc>=4.0.39  # SQL Server connectivity (optional - comment out if causing issues)
   
@@ -18,9 +22,20 @@ dependencies:
   
   # Additional dependencies via pip
   - pip:
+      # Core CLI and UI
       - click>=8.0.0
       - rich>=10.0.0
+      
+      # Performance dependencies
+      - pathspec>=0.11.0  # Ultra-fast gitignore pattern matching (10-50x faster)
       - tiktoken>=0.5.0
+      
+      # Tree-sitter language grammars (ultra-fast parsing)
+      - tree-sitter-python>=0.20.0   # Python grammar
+      - tree-sitter-javascript>=0.20.0  # JavaScript grammar  
+      - tree-sitter-typescript>=0.20.0  # TypeScript grammar
+      
+      # Existing dependencies
       - backports-tarfile==1.2.0
       - build==1.2.2.post1
       - certifi>=2024.12.14
@@ -28,3 +43,5 @@ dependencies:
       - colorama>=0.4.6
       - docutils>=0.21.2
       - isort>=5.13.2
+      - pyperclip>=1.8.0
+      - tomli>=2.0.0  

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+import os
 
 @dataclass
 class AnalysisResult:
@@ -57,7 +58,6 @@ class BaseAnalyzer(ABC):
                 'comments': List[dict],      # List of comments
                 'todos': List[dict],         # List of TODOs
                 'errors': List[dict],        # Optional analysis errors
-                'full_content': str,         # Optional full file content
             }
 
         Note:
@@ -73,10 +73,10 @@ class ProjectAnalyzer:
         self.analyzers = self._initialize_analyzers()
 
     def _initialize_analyzers(self) -> Dict[str, BaseAnalyzer]:
-        """Initialize language-specific analyzers."""
+        """Initialize analyzers for different file types."""
         from .python import PythonAnalyzer
         from .javascript import JavaScriptAnalyzer
-        from . import SQLServerAnalyzer  # Use the proxy instead of direct import
+        from .sql import SQLServerAnalyzer
 
         analyzers = {
             '.py': PythonAnalyzer(),
@@ -84,20 +84,13 @@ class ProjectAnalyzer:
             '.jsx': JavaScriptAnalyzer(),
             '.ts': JavaScriptAnalyzer(),
             '.tsx': JavaScriptAnalyzer(),
+            '.sql': SQLServerAnalyzer(),
         }
-
-        # Try to add SQL analyzer, but don't crash if it fails
-        try:
-            sql_analyzer = SQLServerAnalyzer()
-            analyzers['.sql'] = sql_analyzer
-        except Exception as e:
-            import warnings
-            warnings.warn(f"SQL Server analyzer could not be initialized: {e}")
 
         return analyzers
 
     def analyze(self, path: Path) -> AnalysisResult:
-        """Analyze entire project directory with streaming processing and progress."""
+        """Analyze entire project directory."""
         # Initialize analysis structure
         analysis = {
             'summary': {
@@ -131,60 +124,35 @@ class ProjectAnalyzer:
         config_analysis = self._analyze_project_configuration(path)
         analysis['configuration'] = config_analysis
 
-        # Streaming file processing - don't collect all files first
+        # Progress tracking
+        if hasattr(self, 'progress'):
+            file_task = self.progress.add_task("Processing files...", total=None)
+
+        # Collect and process files
+        files_to_analyze = self._collect_files(path)
         processed_files = 0
-        total_estimated = 0
 
-        # Quick estimation for progress bar
-        if hasattr(self, 'progress'):
-            estimation_task = self.progress.add_task("Estimating files...", total=None)
-            try:
-                for _ in path.rglob('*'):
-                    if total_estimated % 100 == 0:  # Update every 100 files
-                        self.progress.update(estimation_task, description=f"Found {total_estimated} files...")
-                    total_estimated += 1
-                    if total_estimated > 10000:  # Cap estimation for very large repos
-                        break
-                self.progress.remove_task(estimation_task)
-            except:
-                self.progress.remove_task(estimation_task)
-                total_estimated = 1000  # Default estimate
-
-        if hasattr(self, 'progress'):
-            file_task = self.progress.add_task("Processing files...", total=total_estimated)
-
-        # Use the custom file collection method if available, otherwise use default
-        if hasattr(self, '_collect_files'):
-            files_to_analyze = self._collect_files(path)
-        else:
-            files_to_analyze = self._collect_files(path)
-
-        # Stream process files as we find them
         for file_path in files_to_analyze:
             if not file_path.is_file():
                 continue
-            if analyzer := self.analyzers.get(file_path.suffix.lower()):
+                
+            analyzer = self.analyzers.get(file_path.suffix.lower())
+            if analyzer:
                 try:
                     # Update progress
                     if hasattr(self, 'progress'):
-                        self.progress.update(file_task, advance=1, description=f"Analyzing: {file_path.name}")
+                        self.progress.update(file_task, description=f"Analyzing: {file_path.name}")
 
                     file_analysis = analyzer.analyze_file(file_path)
                     str_path = str(file_path)
 
-                    # Ensure file_analysis has required fields
-                    if not isinstance(file_analysis, dict):
+                    # Validate analysis
+                    if not isinstance(file_analysis, dict) or 'type' not in file_analysis:
                         continue
-
-                    if 'type' not in file_analysis:
-                        file_analysis['type'] = file_path.suffix.lower().lstrip('.')
 
                     # Skip files with errors unless they have partial results
                     if 'errors' in file_analysis and not file_analysis.get('metrics', {}).get('loc', 0):
                         continue
-
-                    # Add repo size info for formatting decisions
-                    file_analysis['_repo_total_loc'] = analysis['summary']['project_stats']['lines_of_code']
 
                     # Update file types count
                     ext = file_path.suffix
@@ -196,139 +164,57 @@ class ProjectAnalyzer:
 
                     # Update metrics
                     self._update_metrics(analysis, file_analysis, str_path)
-
                     processed_files += 1
 
                 except Exception as e:
-                    if hasattr(self, 'progress') and hasattr(self, 'debug') and self.debug:
-                        self.progress.update(file_task, description=f"Error: {file_path.name}")
+                    if hasattr(self, 'debug') and self.debug:
+                        print(f"Error analyzing {file_path}: {e}")
                     continue
 
         # Update final count
         analysis['summary']['project_stats']['total_files'] = processed_files
 
-        # Add tree structure generation with progress
+        # Generate project tree
         if hasattr(self, 'progress'):
-            tree_task = self.progress.add_task("Generating project tree...", total=2)
+            tree_task = self.progress.add_task("Generating project tree...", total=1)
 
-        from ..utils.tree import ProjectTree
-
-        # Get excluded paths from analysis
-        excluded_paths = set()
-        if hasattr(self, '_excluded_paths'):
-            excluded_paths = self._excluded_paths
-
-        # Generate tree structure
-        tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
-        project_tree = tree_generator.generate_tree(path, excluded_paths)
+        try:
+            from ..utils.tree import ProjectTree
+            tree_generator = ProjectTree(ignore_patterns=[], max_depth=4)
+            project_tree = tree_generator.generate_tree(path, set())
+            analysis['summary']['structure']['project_tree'] = project_tree
+        except Exception:
+            analysis['summary']['structure']['project_tree'] = "Project tree generation failed"
 
         if hasattr(self, 'progress'):
             self.progress.update(tree_task, advance=1)
-
-        summary_tree = tree_generator.generate_summary_tree(path, excluded_paths)
-
-        if hasattr(self, 'progress'):
-            self.progress.update(tree_task, advance=1)
-
-        # Add to analysis structure
-        analysis['summary']['structure']['project_tree'] = project_tree
-        analysis['summary']['structure']['tree_summary'] = summary_tree
-
 
         # Calculate final metrics
         self._calculate_final_metrics(analysis)
 
         # Generate insights
-        if insights_gen := analysis.get('summary', {}).get('insights_generator'):
-            analysis['insights'] = insights_gen(analysis)
-        else:
-            analysis['insights'] = self._generate_default_insights(analysis)
+        analysis['insights'] = self._generate_insights(analysis)
 
         return AnalysisResult(**analysis)
 
-    def _analyze_package_json(self, path: Path):
-        from .config import analyze_package_json
-        return analyze_package_json(path / 'package.json')
-
-    def _analyze_tsconfig(self, path: Path):
-        from .config import analyze_tsconfig
-        return analyze_tsconfig(path / 'tsconfig.json')
-
-    def _analyze_next_config(self, path: Path):
-        config_file = path / 'next.config.js'
-        if config_file.exists():
-            return {'exists': True, 'type': 'next.js config'}
-        return None
-
-    def _analyze_tailwind_config(self, path: Path):
-        config_file = path / 'tailwind.config.js'
-        if config_file.exists():
-            return {'exists': True, 'type': 'tailwind config'}
-        return None
-
-    def _analyze_pyproject_toml(self, path: Path):
-        config_file = path / 'pyproject.toml'
-        if config_file.exists():
-            try:
-                import tomli
-                with open(config_file, 'rb') as f:
-                    data = tomli.load(f)
-                return {'name': data.get('project', {}).get('name'), 'type': 'python project'}
-            except:
-                return {'error': 'Failed to parse pyproject.toml'}
-        return None
-
-    def _analyze_requirements(self, path: Path):
-        req_file = path / 'requirements.txt'
-        if req_file.exists():
-            try:
-                with open(req_file, 'r') as f:
-                    lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-                return {'dependencies': len(lines), 'type': 'python requirements'}
-            except:
-                return {'error': 'Failed to parse requirements.txt'}
-        return None
-
-    def _analyze_env_example(self, path: Path):
-        env_file = path / '.env.example'
-        if env_file.exists():
-            try:
-                with open(env_file, 'r') as f:
-                    lines = [line for line in f if '=' in line and not line.startswith('#')]
-                return {'env_vars': len(lines), 'type': 'environment template'}
-            except:
-                return {'error': 'Failed to parse .env.example'}
-        return None
-
-    def _extract_readme_summary(self, path: Path):
-        from .config import extract_readme_summary
-        return extract_readme_summary(path)
-
-    def _analyze_project_configuration(self, path: Path) -> dict:
-        """Analyze project configuration files for additional context."""
-        config_files = {
-            'package.json': self._analyze_package_json(path),
-            'tsconfig.json': self._analyze_tsconfig(path),
-            'next.config.js': self._analyze_next_config(path),
-            'tailwind.config.js': self._analyze_tailwind_config(path),
-            'pyproject.toml': self._analyze_pyproject_toml(path),
-            'requirements.txt': self._analyze_requirements(path),
-            '.env.example': self._analyze_env_example(path),
-            'README.md': self._extract_readme_summary(path)
-        }
-
-        # Filter out None values (files that don't exist)
-        return {k: v for k, v in config_files.items() if v is not None}
-
     def _collect_files(self, path: Path) -> List[Path]:
-        """Collect all analyzable files from directory."""
+        """Collect files to analyze."""
         files = []
-
-        for file_path in path.rglob('*'):
-            if (file_path.is_file() and
-                file_path.suffix.lower() in self.analyzers):
-                files.append(file_path)
-
+        supported_extensions = set(self.analyzers.keys())
+        
+        for root, dirs, filenames in os.walk(str(path)):
+            # Skip common ignored directories
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in {
+                'node_modules', '__pycache__', 'venv', 'env', 'dist', 'build'
+            }]
+            
+            root_path = Path(root)
+            for filename in filenames:
+                file_path = root_path / filename
+                
+                if file_path.suffix.lower() in supported_extensions:
+                    files.append(file_path)
+        
         return files
 
     def _update_metrics(self, analysis: dict, file_analysis: dict, file_path: str) -> None:
@@ -361,15 +247,15 @@ class ProjectAnalyzer:
         dir_path = str(Path(file_path).parent)
         analysis['summary']['structure']['directories'].add(dir_path)
 
-        # Update entry points
+        # Check for entry points
         if self._is_entry_point(file_path, file_analysis):
             analysis['summary']['structure']['entry_points'].append(file_path)
 
-        # Update core files
+        # Check for core files
         if self._is_core_file(file_analysis):
             analysis['summary']['structure']['core_files'].append(file_path)
 
-        # Update maintenance info
+        # Update TODOs
         for todo in file_analysis.get('todos', []):
             analysis['summary']['maintenance']['todos'].append({
                 'file': file_path,
@@ -382,7 +268,6 @@ class ProjectAnalyzer:
         """Calculate final metrics and handle serialization."""
         total_files = analysis['summary']['project_stats']['total_files']
         if total_files > 0:
-            # Calculate average file size
             analysis['summary']['project_stats']['avg_file_size'] = \
                 analysis['summary']['project_stats']['lines_of_code'] / total_files
 
@@ -407,21 +292,54 @@ class ProjectAnalyzer:
 
     def _is_entry_point(self, file_path: str, analysis: dict) -> bool:
         """Identify if a file is a potential entry point."""
-        from ..utils import is_potential_entry_point
-        return is_potential_entry_point(file_path, analysis)
+        filename = Path(file_path).name.lower()
+        
+        # Common entry point patterns
+        entry_patterns = [
+            'main.py', 'app.py', 'server.py', 'cli.py', 'run.py',
+            'index.js', 'app.js', 'server.js', 'main.js'
+        ]
+        
+        if filename in entry_patterns:
+            return True
+        
+        # Check for main functions
+        functions = analysis.get('functions', [])
+        if any('main' in func.get('name', '').lower() for func in functions):
+            return True
+            
+        return False
 
     def _is_core_file(self, analysis: dict) -> bool:
         """Identify if a file is likely a core component."""
-        from ..utils import is_core_file
-        return is_core_file(analysis)
+        metrics = analysis.get('metrics', {})
+        
+        # High number of functions or classes
+        if metrics.get('functions', 0) > 10 or metrics.get('classes', 0) > 5:
+            return True
+        
+        # High number of imports
+        if metrics.get('imports', 0) > 15:
+            return True
+            
+        return False
 
     def _estimate_todo_priority(self, text: str) -> str:
         """Estimate TODO priority based on content."""
-        from ..utils import estimate_todo_priority
-        return estimate_todo_priority(text)
+        text_upper = text.upper()
+        
+        high_priority = ['CRITICAL', 'URGENT', 'ASAP', 'SECURITY', 'BUG', 'BROKEN', 'CRASH', 'FIXME']
+        medium_priority = ['IMPORTANT', 'SOON', 'REFACTOR', 'OPTIMIZE', 'PERFORMANCE']
+        
+        if any(keyword in text_upper for keyword in high_priority):
+            return 'high'
+        elif any(keyword in text_upper for keyword in medium_priority):
+            return 'medium'
+        else:
+            return 'low'
 
-    def _generate_default_insights(self, analysis: dict) -> List[str]:
-        """Generate default insights from analysis results."""
+    def _generate_insights(self, analysis: dict) -> List[str]:
+        """Generate insights from analysis results."""
         insights = []
 
         # Basic project stats
@@ -432,8 +350,6 @@ class ProjectAnalyzer:
         doc_coverage = analysis['summary']['maintenance']['doc_coverage']
         if doc_coverage < 50:
             insights.append(f"Low documentation coverage ({doc_coverage:.1f}%)")
-        elif doc_coverage > 80:
-            insights.append(f"Good documentation coverage ({doc_coverage:.1f}%)")
 
         # Complexity insights
         complex_funcs = analysis['summary']['code_metrics']['functions']['complex']
@@ -449,68 +365,49 @@ class ProjectAnalyzer:
 
         return insights
 
-    def _analyze_package_json(self, path: Path):
-        from .config import analyze_package_json
-        return analyze_package_json(path / 'package.json')
-
-    def _analyze_tsconfig(self, path: Path):
-        from .config import analyze_tsconfig
-        return analyze_tsconfig(path / 'tsconfig.json')
-
-    def _analyze_next_config(self, path: Path):
-        config_file = path / 'next.config.js'
-        if config_file.exists():
-            return {'exists': True, 'type': 'next.js config'}
-        return None
-
-    def _analyze_tailwind_config(self, path: Path):
-        for config_name in ['tailwind.config.js', 'tailwind.config.ts']:
-            config_file = path / config_name
-            if config_file.exists():
-                return {'exists': True, 'type': 'tailwind config', 'file': config_name}
-        return None
-
-    def _analyze_pyproject_toml(self, path: Path):
-        config_file = path / 'pyproject.toml'
-        if config_file.exists():
+    def _analyze_project_configuration(self, path: Path) -> dict:
+        """Analyze project configuration files."""
+        config_files = {}
+        
+        # Package.json
+        package_file = path / 'package.json'
+        if package_file.exists():
             try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    # Simple parsing - look for [project] section
-                    if '[project]' in content:
-                        lines = content.split('\n')
-                        for line in lines:
-                            if line.strip().startswith('name ='):
-                                name = line.split('=')[1].strip().strip('"\'')
-                                return {'name': name, 'type': 'python project'}
-                return {'exists': True, 'type': 'python project'}
+                import json
+                with open(package_file, 'r') as f:
+                    data = json.load(f)
+                config_files['package.json'] = {
+                    'name': data.get('name'),
+                    'version': data.get('version'),
+                    'type': 'node.js project'
+                }
             except Exception:
-                return {'error': 'Failed to parse pyproject.toml'}
-        return None
+                config_files['package.json'] = {'error': 'Failed to parse'}
 
-    def _analyze_requirements(self, path: Path):
+        # Pyproject.toml
+        pyproject_file = path / 'pyproject.toml'
+        if pyproject_file.exists():
+            config_files['pyproject.toml'] = {'type': 'python project'}
+
+        # Requirements.txt
         req_file = path / 'requirements.txt'
         if req_file.exists():
             try:
                 with open(req_file, 'r') as f:
                     lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-                return {'dependencies': len(lines), 'type': 'python requirements'}
+                config_files['requirements.txt'] = {
+                    'dependencies': len(lines),
+                    'type': 'python requirements'
+                }
             except Exception:
-                return {'error': 'Failed to parse requirements.txt'}
-        return None
+                config_files['requirements.txt'] = {'error': 'Failed to parse'}
 
-    def _analyze_env_example(self, path: Path):
-        for env_name in ['.env.example', '.env.template', '.env.sample']:
-            env_file = path / env_name
-            if env_file.exists():
-                try:
-                    with open(env_file, 'r') as f:
-                        lines = [line for line in f if '=' in line and not line.startswith('#')]
-                    return {'env_vars': len(lines), 'type': 'environment template', 'file': env_name}
-                except Exception:
-                    return {'error': f'Failed to parse {env_name}'}
-        return None
+        # README
+        readme_files = ['README.md', 'README.rst', 'README.txt']
+        for readme_name in readme_files:
+            readme_file = path / readme_name
+            if readme_file.exists():
+                config_files['README'] = {'type': 'project readme', 'file': readme_name}
+                break
 
-    def _extract_readme_summary(self, path: Path):
-        from .config import extract_readme_summary
-        return extract_readme_summary(path)
+        return config_files

@@ -175,7 +175,12 @@ class MenuState:
         # Make sure root is expanded by default so we can see files
         self.expanded_dirs.add(str(self.root_path))
         self.rebuild_visible_items()
-        self._load_state()
+
+        # Load saved state first, then auto-select if no saved state exists
+        state_loaded = self._load_state()
+        if not state_loaded:
+            # No saved state - auto-select all non-ignored files and folders
+            self._auto_select_files()
 
     def toggle_dir_expanded(self, path: Path) -> None:
         """Toggle directory expansion state."""
@@ -466,6 +471,49 @@ class MenuState:
         finally:
             self.update_in_progress = False
 
+    def _auto_select_files(self) -> None:
+        """Auto-select all files and folders that are not ignored by gitignore or common excludes."""
+        selected_count = 0
+
+        try:
+            # Walk through all files and directories
+            for root, dirs, files in os.walk(self.root_path):
+                root_path = Path(root)
+
+                # Process directories first
+                for dir_name in dirs[:]:  # Use slice copy to allow modification during iteration
+                    dir_path = root_path / dir_name
+
+                    # Skip if this directory should be excluded
+                    if self.is_excluded(dir_path):
+                        dirs.remove(dir_name)  # Don't recurse into excluded directories
+                        continue
+
+                    # Auto-select this directory
+                    self.selected_items.add(str(dir_path))
+                    selected_count += 1
+
+                # Process files in current directory
+                for file_name in files:
+                    file_path = root_path / file_name
+
+                    # Skip if this file should be excluded
+                    if self.is_excluded(file_path):
+                        continue
+
+                    # Auto-select this file
+                    self.selected_items.add(str(file_path))
+                    selected_count += 1
+
+            # Update status message
+            if selected_count > 0:
+                self.status_message = f"Auto-selected {selected_count} files and folders (excluding ignored items)"
+            else:
+                self.status_message = "No files found to auto-select"
+
+        except Exception as e:
+            self.status_message = f"Error during auto-selection: {str(e)}"
+
     def _save_state(self) -> None:
         """Save the current state to a file."""
         try:
@@ -473,21 +521,24 @@ class MenuState:
             state_dir.mkdir(exist_ok=True)
             state_file = state_dir / 'menu_state.json'
 
-            # Simple state - just expanded dirs and selected items
+            # Enhanced state - expanded dirs, selected items, and metadata
             state = {
                 'expanded_dirs': list(self.expanded_dirs),
                 'selected_items': list(self.selected_items),
-                'options': self.options
+                'options': self.options,
+                'auto_selected': True,  # Mark that we have performed auto-selection
+                'version': '1.0'  # State format version for future compatibility
             }
 
             import json
-            with open(state_file, 'w') as f:
-                json.dump(state, f)
+            with open(state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving menu state: {str(e)}")
+            # Use status message instead of print in TUI mode
+            self.status_message = f"Error saving menu state: {str(e)}"
 
-    def _load_state(self) -> None:
-        """Load the saved state from a file."""
+    def _load_state(self) -> bool:
+        """Load the saved state from a file. Returns True if state was loaded successfully."""
         try:
             state_file = self.root_path / '.codelens' / 'menu_state.json'
             if state_file.exists():
@@ -509,8 +560,10 @@ class MenuState:
                 selected_count = len(self.selected_items)
                 if selected_count > 0:
                     self.status_message = f"Loaded {selected_count} selected items from saved state"
+                return True
         except Exception as e:
             self.status_message = f"Error loading menu state: {str(e)}"
+        return False
 
     def _open_in_llm(self) -> bool:
         """
@@ -811,7 +864,8 @@ def draw_menu(stdscr, state: MenuState) -> None:
         status = f" {state.status_message} "
         if not status.strip():
             if state.active_section == 'files':
-                excluded_count = len(state.excluded_items)
+                # Count excluded items by checking all visible items
+                excluded_count = sum(1 for path, _ in state.visible_items if state.is_excluded(path))
                 selected_count = len(state.selected_items)
                 if excluded_count > 0 and selected_count > 0:
                     status = f" {excluded_count} items excluded, {selected_count} explicitly included | Space: Toggle selection (recursive for directories) | Enter: Confirm "

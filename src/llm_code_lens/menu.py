@@ -480,12 +480,10 @@ class MenuState:
             state_dir.mkdir(exist_ok=True)
             state_file = state_dir / 'menu_state.json'
             
-            # Convert paths to strings for JSON serialization
+            # Simple state - just expanded dirs and selected items
             state = {
                 'expanded_dirs': list(self.expanded_dirs),
-                'excluded_items': list(self.excluded_items),
                 'selected_items': list(self.selected_items),
-                'partially_selected_items': list(self.partially_selected_items),
                 'options': self.options
             }
             
@@ -493,7 +491,6 @@ class MenuState:
             with open(state_file, 'w') as f:
                 json.dump(state, f)
         except Exception:
-            # Silently fail if we can't save state
             pass
             
     def _load_state(self) -> None:
@@ -505,11 +502,9 @@ class MenuState:
                 with open(state_file, 'r') as f:
                     state = json.load(f)
                 
-                # Restore state
+                # Restore simple state
                 self.expanded_dirs = set(state.get('expanded_dirs', []))
-                self.excluded_items = set(state.get('excluded_items', []))
                 self.selected_items = set(state.get('selected_items', []))
-                self.partially_selected_items = set(state.get('partially_selected_items', []))
                 
                 # Restore options if available
                 if 'options' in state:
@@ -518,12 +513,10 @@ class MenuState:
                             self.options[key] = value
                 
                 # Set status message to indicate loaded state
-                excluded_count = len(self.excluded_items)
-                partially_selected_count = len(self.partially_selected_items)
-                if excluded_count > 0 or partially_selected_count > 0:
-                    self.status_message = f"Loaded {excluded_count} excluded items and {partially_selected_count} partially selected items from saved state"
+                selected_count = len(self.selected_items)
+                if selected_count > 0:
+                    self.status_message = f"Loaded {selected_count} selected items from saved state"
         except Exception as e:
-            # Log the error instead of silently failing
             self.status_message = f"Error loading menu state: {str(e)}"
             
     def _open_in_llm(self) -> bool:
@@ -575,91 +568,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
     curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)   # Options
     curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_RED)    # Active section
     
-    # If scanning is in progress, show a progress screen
-    if state.scanning_in_progress:
-        stdscr.clear()
-        
-        # Draw header
-        header = " LLM Code Lens - Scanning Repository "
-        header = header.center(max_x-1, "=")
-        try:
-            stdscr.addstr(0, 0, header[:max_x-1], curses.color_pair(1))
-        except curses.error:
-            pass
-        
-        # Calculate progress percentage
-        progress_pct = min(100, int((state.scan_progress / max(1, state.scan_total)) * 100))
-        
-        # Show status message with better formatting
-        try:
-            # Status message with timestamp
-            import time
-            timestamp = time.strftime("%H:%M:%S")
-            status_line = f"Status [{timestamp}]: {state.status_message}"
-            stdscr.addstr(3, 2, status_line)
-            
-            # Show current directory with better formatting
-            current_dir = state.scan_current_dir
-            if len(current_dir) > max_x - 20:
-                current_dir = "..." + current_dir[-(max_x - 23):]
-            
-            # Show directory with highlight
-            stdscr.addstr(5, 2, "Current directory: ")
-            stdscr.addstr(5, 20, current_dir, curses.color_pair(5) | curses.A_BOLD)
-            
-            # Show scan statistics
-            stdscr.addstr(6, 2, f"Directories found: {state.scan_total}")
-            stdscr.addstr(6, 30, f"Processed: {state.scan_progress}")
-            
-            # Draw progress bar with better visual feedback
-            bar_width = max_x - 20
-            filled_width = int((bar_width * progress_pct) / 100)
-            
-            # Use different colors for different progress levels
-            bar_color = curses.color_pair(3)  # Default green
-            if progress_pct < 25:
-                bar_color = curses.color_pair(4)  # Red for early progress
-            elif progress_pct < 50:
-                bar_color = curses.color_pair(5)  # Yellow for mid progress
-            
-            # Draw progress percentage
-            stdscr.addstr(8, 2, f"Progress: {progress_pct}% ")
-            
-            # Draw progress bar background
-            stdscr.addstr(8, 15, "[" + " " * bar_width + "]")
-            
-            # Draw filled portion of progress bar
-            if filled_width > 0:
-                stdscr.addstr(8, 16, "=" * filled_width, bar_color | curses.A_BOLD)
-            
-            # Show cancel instruction with highlight
-            stdscr.addstr(10, 2, "Press ", curses.A_BOLD)
-            stdscr.addstr(10, 8, "ESC", curses.color_pair(7) | curses.A_BOLD)
-            stdscr.addstr(10, 12, " to cancel scanning", curses.A_BOLD)
-            
-            # Add more helpful information
-            stdscr.addstr(12, 2, "Scanning large repositories may take some time...")
-            stdscr.addstr(13, 2, "This helps optimize the analysis by excluding irrelevant files.")
-            
-            # Add animation to show activity even when progress doesn't change
-            import time
-            animation_chars = "|/-\\"
-            animation_idx = int(time.time() * 5) % len(animation_chars)
-            stdscr.addstr(15, 2, f"Working {animation_chars[animation_idx]}")
-        except curses.error:
-            pass
-        
-        # Draw footer
-        footer_y = max_y - 2
-        footer = " Please wait while we prepare your repository for analysis... "
-        footer = footer.center(max_x-1, "=")
-        try:
-            stdscr.addstr(footer_y, 0, footer[:max_x-1], curses.color_pair(1))
-        except curses.error:
-            pass
-        
-        stdscr.refresh()
-        return
+    # Remove scanning screen - no longer needed
     
     # Calculate layout
     options_height = 10  # Height of options section
@@ -726,12 +635,16 @@ def draw_menu(stdscr, state: MenuState) -> None:
             else:
                 prefix = "  "
             
-            # Determine selection indicator - simplified to only + and -
+            # Simple Norton Commander style display
             path_str = str(path)
-            if is_excluded:
-                sel_indicator = "[-]"  # Excluded
+            is_selected = path_str in state.selected_items
+            
+            if is_selected:
+                sel_indicator = "[*]"  # Selected
+            elif is_excluded:
+                sel_indicator = "[X]"  # Auto-excluded (common dirs)
             else:
-                sel_indicator = "[+]"  # Included
+                sel_indicator = "[ ]"  # Available
                 
             item_str = f"{indent}{prefix}{sel_indicator} {path.name}"
             
@@ -739,18 +652,17 @@ def draw_menu(stdscr, state: MenuState) -> None:
             if len(item_str) > max_x - 2:
                 item_str = item_str[:max_x - 5] + "..."
                 
-            # Determine color
-            path_str = str(path)
+            # Simple color scheme
             if state.active_section == 'files' and idx == state.cursor_pos:
                 attr = curses.color_pair(2)  # Highlighted
-            elif path_str in state.selected_items:
-                attr = curses.color_pair(3) | curses.A_BOLD  # Explicitly selected (bold)
+            elif is_selected:
+                attr = curses.color_pair(3) | curses.A_BOLD  # Selected
             elif is_excluded:
-                attr = curses.color_pair(4)  # Excluded
-            elif not is_excluded:
-                attr = curses.color_pair(3)  # Included
+                attr = curses.color_pair(4)  # Auto-excluded
+            elif is_dir:
+                attr = curses.color_pair(5)  # Directory
             else:
-                attr = 0  # Default
+                attr = 0  # Default file
                 
             # If it's a directory, add directory color (but keep excluded color if excluded)
             if is_dir and not (state.active_section == 'files' and idx == state.cursor_pos) and not is_excluded:
@@ -968,15 +880,7 @@ def handle_input(key: int, state: MenuState) -> bool:
             return False
         return False
         
-    # Handle scanning cancellation
-    if state.scanning_in_progress:
-        if key == 27:  # ESC key
-            state.cancel_scan_requested = True
-            state.status_message = "Cancelling scan..."
-            # Don't exit the menu, just cancel the scan
-            return False
-        # Ignore all other input during scanning
-        return False
+    # Remove scanning handling - no longer needed
         
     # Handle editing mode separately
     if state.editing_option:
@@ -1047,12 +951,8 @@ def handle_input(key: int, state: MenuState) -> bool:
                         state.cursor_pos = i
                         break
         elif key == ord(' ') and current_item:
-            # Full select with all sub-elements - no rescan
-            state.toggle_selection(current_item, fully_select=True)
-            # Don't rebuild visible items immediately - just update status
-            excluded_count = len(state.excluded_items)
-            selected_count = len(state.selected_items)
-            state.status_message = f"Selection updated: {excluded_count} excluded, {selected_count} selected"
+            # Simple Norton Commander style selection toggle
+            state.toggle_selection(current_item)
     
     # Options section controls
     elif state.active_section == 'options':
@@ -1144,68 +1044,20 @@ def run_menu(path: Path, initial_settings: Dict[str, Any] = None) -> Dict[str, A
         state.scanning_in_progress = True
         state.dirty_scan = True
         
-        # Start the scan in a separate thread to keep UI responsive
-        import threading
+        # Set timeout for responsive input
+        stdscr.timeout(-1)
         
-        def perform_scan():
-            try:
-                state._auto_exclude_common_dirs()
-                if not state.cancel_scan_requested:
-                    state.rebuild_visible_items()
-                    state._load_state()
-                state.scanning_in_progress = False
-            except Exception as e:
-                state.status_message = f"Error during scan: {str(e)}"
-                state.scanning_in_progress = False
-        
-        # Start the scan thread
-        scan_thread = threading.Thread(target=perform_scan)
-        scan_thread.daemon = True
-        scan_thread.start()
-        
-        # Main loop
+        # Main loop - simple and fast
         while True:
-            # Draw the menu (will show scanning screen if scanning_in_progress is True)
             draw_menu(stdscr, state)
             
-            # Handle input with shorter timeout during scanning
             try:
-                if state.scanning_in_progress:
-                    # Use a very short timeout during scanning for responsive UI
-                    stdscr.timeout(50)
-                else:
-                    # Use a longer timeout when not scanning
-                    stdscr.timeout(-1)
-                
                 key = stdscr.getch()
-                
-                # Handle ESC key during scanning
-                if state.scanning_in_progress and key == 27:  # ESC key
-                    state.cancel_scan_requested = True
-                    state.status_message = "Cancelling scan..."
-                    # Don't exit, just wait for scan to complete
-                    continue
-                
-                # Skip other input processing during scanning
-                if state.scanning_in_progress:
-                    continue
-            
-                # Normal input handling when not scanning
                 if handle_input(key, state):
                     break
             except KeyboardInterrupt:
-                # Handle Ctrl+C
-                if state.scanning_in_progress:
-                    state.cancel_scan_requested = True
-                    state.status_message = "Cancelling scan..."
-                else:
-                    state.cancelled = True
-                    break
-        
-        # If scan thread is still running, wait for it to finish
-        if scan_thread.is_alive():
-            state.cancel_scan_requested = True
-            scan_thread.join(timeout=1.0)  # Wait up to 1 second
+                state.cancelled = True
+                break
         
         return state.get_results()
     

@@ -199,135 +199,25 @@ class MenuState:
         """Check if a path is selected."""
         return str(path) in self.selected_items
         
-    def is_partially_selected(self, path: Path) -> bool:
-        """Check if a path is partially selected."""
-        path_str = str(path)
-        
-        # Only directories can be partially selected
-        if not path.is_dir():
-            return False
-            
-        # If the item is explicitly partially selected
-        if path_str in self.partially_selected_items:
-            return True
-            
-        # If the item is explicitly selected or excluded, it's not partially selected
-        if path_str in self.selected_items or path_str in self.excluded_items:
-            return False
-            
-        # Check if any parent is partially selected (and this item is not excluded)
-        current = path.parent
-        while current != self.root_path.parent:
-            parent_str = str(current)
-            if parent_str in self.partially_selected_items:
-                # If parent is partially selected and this item is not excluded, it inherits partial selection
-                if path_str not in self.excluded_items:
-                    return True
-            if parent_str in self.excluded_items:
-                return False
-            current = current.parent
-                
-        return False
-        
-    def _update_parent_selection_state(self, directory: Path) -> None:
-        """Update the selection state of a parent directory based on its children."""
-        if not directory.exists() or directory == self.root_path.parent:
-            return
-            
-        dir_str = str(directory)
-        
-        # Skip if the directory is explicitly excluded or selected
-        if dir_str in self.excluded_items or dir_str in self.selected_items:
-            return
-            
-        # Initialize counters
-        total_children = 0
-        selected_children = 0
-        excluded_children = 0
-        partially_selected_children = 0
-        
-        try:
-            # Count all immediate children
-            for child in directory.iterdir():
-                child_str = str(child)
-                total_children += 1
-                
-                if child_str in self.selected_items:
-                    selected_children += 1
-                elif child_str in self.excluded_items:
-                    excluded_children += 1
-                elif child_str in self.partially_selected_items:
-                    partially_selected_children += 1
-                else:
-                    # If child is neither selected nor excluded, check if it's a common directory
-                    if child.is_dir() and child.name in self.common_excludes:
-                        excluded_children += 1
-        except (PermissionError, OSError):
-            # If we can't access the directory, don't change its state
-            return
-            
-        # Skip empty directories
-        if total_children == 0:
-            return
-            
-        # Update the directory's state based on its children
-        if selected_children == total_children:
-            # All children are selected, so the directory should be fully selected
-            self.partially_selected_items.discard(dir_str)
-            self.selected_items.add(dir_str)
-        elif excluded_children == total_children:
-            # All children are excluded, so the directory should be excluded
-            self.partially_selected_items.discard(dir_str)
-            self.selected_items.discard(dir_str)
-            self.excluded_items.add(dir_str)
-        elif selected_children > 0 or partially_selected_children > 0:
-            # Some children are selected or partially selected, so the directory should be partially selected
-            self.selected_items.discard(dir_str)
-            self.excluded_items.discard(dir_str)
-            self.partially_selected_items.add(dir_str)
-        else:
-            # No children are selected or partially selected, so the directory should be neither
-            self.selected_items.discard(dir_str)
-            self.partially_selected_items.discard(dir_str)
-            
-        # Recursively update parent directories, but only if this directory's state changed
-        if dir_str in self.selected_items or dir_str in self.partially_selected_items or dir_str in self.excluded_items:
-            self._update_parent_selection_state(directory.parent)
-        
     def is_excluded(self, path: Path) -> bool:
-        """Check if a path is excluded (updated to include gitignore)."""
-        path_str = str(path)
-
+        """Check if a path should be excluded by default (common directories)."""
         # Check gitignore first if enabled
         if self.gitignore_parser and self.gitignore_parser.should_ignore(path):
             return True
-
-        # If the item is explicitly selected or partially selected, it's not excluded
-        if path_str in self.selected_items or path_str in self.partially_selected_items:
-            return False
-
-        # Check if this path is explicitly excluded
-        if path_str in self.excluded_items:
-            return True
-
-        # Check if any parent is excluded
-        current = path.parent
-        while current != self.root_path.parent:
-            if str(current) in self.excluded_items:
-                return True
-            if str(current) in self.selected_items or str(current) in self.partially_selected_items:
-                return False
-            current = current.parent
-
-        # Check for common directories that should be excluded by default
+        
+        # Check if it's a common exclude directory
         if path.is_dir() and path.name in self.common_excludes:
             return True
-
-        # For files in common directories, they're excluded by default
+            
+        # Check if parent is a common exclude directory
         if path.parent.name in self.common_excludes:
             return True
-
+            
         return False
+        
+    # Remove this entire method - no longer needed
+        
+    # This method was already replaced above - remove this duplicate
     
     def get_current_item(self) -> Optional[Path]:
         """Get the currently selected item."""
@@ -348,272 +238,38 @@ class MenuState:
                 self.scroll_offset = self.cursor_pos - self.max_visible + 1
     
     def rebuild_visible_items(self) -> None:
-        """Rebuild the list of visible items based on expanded directories."""
-        # Only rebuild if dirty flag is set (for major changes like selection toggles)
-        if not self.dirty_scan:
-            return
-
-        try:
-            # Auto-exclude common directories before building the list
-            if not self.auto_exclude_complete:
-                self._auto_exclude_common_dirs()
-                
-                # If scan was cancelled, don't continue
-                if self.cancel_scan_requested:
-                    self.dirty_scan = False
-                    self.scanning_in_progress = False
-                    return
-            
-            # Update status
-            self.status_message = "Building directory tree..."
-            
-            # Reset visible items
-            self.visible_items = []
-            
-            # Build the item list
-            self._build_item_list(self.root_path, 0)
-            
-            # Adjust cursor position if it's now out of bounds
-            if self.cursor_pos >= len(self.visible_items) and len(self.visible_items) > 0:
-                self.cursor_pos = len(self.visible_items) - 1
-                
-            # Adjust scroll offset if needed
-            if self.cursor_pos < self.scroll_offset:
-                self.scroll_offset = max(0, self.cursor_pos)
-            elif self.cursor_pos >= self.scroll_offset + self.max_visible:
-                self.scroll_offset = max(0, self.cursor_pos - self.max_visible + 1)
-            
-            # Mark scan as complete and not dirty
-            self.scan_complete = True
-            self.dirty_scan = False
-            self.status_message = "Directory structure loaded"
-        except Exception as e:
-            self.status_message = f"Error building directory tree: {str(e)}"
-        finally:
-            # Always reset scanning state when done
-            self.scanning_in_progress = False
-    
-    def _auto_exclude_common_dirs(self) -> None:
-        """Automatically exclude common directories that should be ignored."""
-        # Prevent repeated scans
-        if self.auto_exclude_complete:
-            return
-
-        # Set scanning state
-        self.scanning_in_progress = True
-        self.status_message = "Scanning directory structure..."
+        """Fast rebuild of visible items - Norton Commander style."""
+        self.visible_items = []
+        self._build_item_list(self.root_path, 0)
         
-        try:
-            # First, count total directories for progress reporting
-            self.scan_total = 0
-            self.scan_progress = 0
-            
-            # Count directories first to provide progress percentage
-            self.status_message = "Counting directories for progress tracking..."
-            
-            # Use a more efficient approach with os.walk
-            for root, dirs, _ in os.walk(str(self.root_path)):
-                # Check for cancellation request more frequently
-                if self.cancel_scan_requested:
-                    self.status_message = "Scan cancelled by user"
-                    self.scanning_in_progress = False
-                    self.dirty_scan = False  # Mark as not dirty to prevent automatic rescan
-                    return
-                    
-                # Update progress for UI feedback
-                self.scan_total += len(dirs)
-                self.scan_current_dir = os.path.basename(root)
-                self.status_message = f"Counting directories: {self.scan_total} found so far..."
-                
-                # Force screen refresh periodically
-                if self.scan_total % 50 == 0:
-                    # We can't directly refresh the screen here, but we can yield control
-                    # back to the main loop by sleeping briefly
-                    import time
-                    time.sleep(0.01)
-            
-            # Now find and exclude common directories
-            self.status_message = "Scanning for common directories to exclude..."
-            self.scan_progress = 0  # Reset progress for the second phase
-            
-            # Use a more efficient approach with a single walk
-            for root, dirs, _ in os.walk(str(self.root_path)):
-                # Check for cancellation request
-                if self.cancel_scan_requested:
-                    self.status_message = "Scan cancelled by user"
-                    self.scanning_in_progress = False
-                    self.dirty_scan = False  # Mark as not dirty to prevent automatic rescan
-                    return
-                
-                # Update progress
-                self.scan_progress += 1
-                
-                # Update progress percentage more frequently
-                if self.scan_total > 0:
-                    progress_pct = min(100, int((self.scan_progress / max(1, self.scan_total)) * 100))
-                    self.scan_current_dir = os.path.basename(root)
-                    self.status_message = f"Scanning: {self.scan_current_dir} ({progress_pct}%)"
-                
-                # Check if any of the directories match our common excludes and prevent traversal
-                for d in dirs[:]:  # Create a copy to safely modify during iteration
-                    if d in self.common_excludes:
-                        path = Path(os.path.join(root, d))
-                        path_str = str(path)
-                        # Add to excluded items if not explicitly selected
-                        if (path_str not in self.excluded_items and
-                            path_str not in self.selected_items and
-                            path_str not in self.partially_selected_items):
-                            self.excluded_items.add(path_str)
-                        # Remove from dirs to prevent os.walk from traversing it
-                        dirs.remove(d)
-                
-                # Force screen refresh periodically
-                if self.scan_progress % 50 == 0:
-                    import time
-                    time.sleep(0.01)
-            
-            # Mark auto-exclusion as complete
-            self.auto_exclude_complete = True
-            self.status_message = "Directory scan complete"
-        except Exception as e:
-            # Log error but continue
-            self.status_message = f"Error during directory scan: {str(e)}"
-        finally:
-            # Always reset scanning state when done
-            if self.cancel_scan_requested:
-                self.status_message = "Scan cancelled by user"
-                self.dirty_scan = False  # Mark as not dirty to prevent automatic rescan
-            
-    def _recursively_include(self, directory: Path) -> None:
-        """Recursively include all files and subdirectories."""
-        try:
-            # First, add the directory itself to selected items and remove from other collections
-            dir_str = str(directory)
-            self.selected_items.add(dir_str)
-            self.excluded_items.discard(dir_str)
-            self.partially_selected_items.discard(dir_str)
-            
-            # Process immediate children first to avoid excessive recursion
-            try:
-                for item in directory.iterdir():
-                    item_str = str(item)
-                    
-                    # Remove from excluded and partially selected items
-                    self.excluded_items.discard(item_str)
-                    self.partially_selected_items.discard(item_str)
-                    
-                    # Add to selected items
-                    self.selected_items.add(item_str)
-                    
-                    # If it's a directory, process it recursively
-                    if item.is_dir():
-                        # Expand the directory
-                        self.expanded_dirs.add(item_str)
-                        
-                        # Process recursively, but with a try/except to handle permission errors
-                        try:
-                            self._recursively_include(item)
-                        except (PermissionError, OSError):
-                            # If we can't access the directory, just mark it as selected
-                            pass
-            except (PermissionError, OSError):
-                # If we can't access the directory, just mark it as selected
-                pass
-                
-            # Mark directory structure as dirty to force rescan
-            self.dirty_scan = True
-        except Exception as e:
-            # Log the error but continue
-            self.status_message = f"Error including directory: {str(e)}"
+        # Adjust cursor position if it's now out of bounds
+        if self.cursor_pos >= len(self.visible_items) and len(self.visible_items) > 0:
+            self.cursor_pos = len(self.visible_items) - 1
     
-    def _recursively_exclude(self, directory: Path) -> None:
-        """Recursively exclude all files and subdirectories."""
-        try:
-            # First, add the directory itself to excluded items and remove from other collections
-            dir_str = str(directory)
-            self.excluded_items.add(dir_str)
-            self.selected_items.discard(dir_str)
-            self.partially_selected_items.discard(dir_str)
+    # Remove this entire method - no longer needed
             
-            # Process immediate children first to avoid excessive recursion
-            try:
-                for item in directory.iterdir():
-                    item_str = str(item)
-                    
-                    # Add to excluded items
-                    self.excluded_items.add(item_str)
-                    
-                    # Remove from selected and partially selected items
-                    self.selected_items.discard(item_str)
-                    self.partially_selected_items.discard(item_str)
-                    
-                    # If it's a directory, process it recursively
-                    if item.is_dir():
-                        # Process recursively, but with a try/except to handle permission errors
-                        try:
-                            self._recursively_exclude(item)
-                        except (PermissionError, OSError):
-                            # If we can't access the directory, just mark it as excluded
-                            pass
-            except (PermissionError, OSError):
-                # If we can't access the directory, just mark it as excluded
-                pass
-                
-            # Mark directory structure as dirty to force rescan
-            self.dirty_scan = True
-        except Exception as e:
-            # Log the error but continue
-            self.status_message = f"Error excluding directory: {str(e)}"
+    # Remove this entire method - no longer needed
     
-    def _recursively_exclude_simple(self, directory: Path) -> None:
-        """Simple recursive exclusion without triggering rescans."""
-        try:
-            dir_str = str(directory)
-            self.excluded_items.add(dir_str)
-
-            # Process children without complex state management
-            for item in directory.iterdir():
-                item_str = str(item)
-                self.excluded_items.add(item_str)
-                if item.is_dir():
-                    self._recursively_exclude_simple(item)
-        except (PermissionError, OSError):
-            pass
+    # Remove this entire method - no longer needed
+    
+    # Remove this entire method - no longer needed
 
     def _build_item_list(self, path: Path, depth: int) -> None:
-        """Recursively build the list of visible items."""
-        try:
-            # Add the current path
+        """Fast build of visible items - Norton Commander style."""
+        if path != self.root_path:  # Don't add root to list
             self.visible_items.append((path, depth))
-            
-            # If it's a directory and it's expanded, add its children
-            if path.is_dir() and str(path) in self.expanded_dirs:
-                try:
-                    # Sort directories first, then files
-                    items = sorted(path.iterdir(), 
-                                  key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
-                    
-                    # Pre-exclude common directories and ensure they stay excluded
-                    for item in items:
-                        if item.is_dir() and item.name in self.common_excludes:
-                            item_str = str(item)
-                            # Always mark common directories as excluded unless explicitly selected
-                            if item_str not in self.selected_items and item_str not in self.partially_selected_items:
-                                self.excluded_items.add(item_str)
-                                # Recursively exclude children too
-                                try:
-                                    self._recursively_exclude_simple(item)
-                                except:
-                                    pass
-
-                        # Include all files/directories in the visible list
-                        self._build_item_list(item, depth + 1)
-                except PermissionError:
-                    # Handle permission errors gracefully
-                    pass
-        except Exception:
-            # Ignore any errors during item list building
-            pass
+        
+        # If it's a directory and it's expanded, add its children
+        if path.is_dir() and str(path) in self.expanded_dirs:
+            try:
+                # Sort directories first, then files
+                items = sorted(path.iterdir(), 
+                              key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
+                
+                for item in items:
+                    self._build_item_list(item, depth + 1)
+            except (PermissionError, OSError):
+                pass
     
     def toggle_option(self, option_name: str) -> None:
         """Toggle a boolean option or cycle through value options."""
@@ -711,39 +367,19 @@ class MenuState:
             self.option_cursor = new_pos
     
     def validate_selection(self) -> Dict[str, List[str]]:
-        """Validate the selection and return statistics about selected/excluded items."""
+        """Simple selection validation - Norton Commander style."""
         stats = {
-            'excluded_count': len(self.excluded_items),
             'selected_count': len(self.selected_items),
-            'partially_selected_count': len(self.partially_selected_items),
-            'excluded_dirs': [],
-            'excluded_files': [],
             'selected_dirs': [],
-            'selected_files': [],
-            'partially_selected_dirs': []
+            'selected_files': []
         }
         
-        # Categorize excluded items
-        for path_str in self.excluded_items:
-            path = Path(path_str)
-            if path.is_dir():
-                stats['excluded_dirs'].append(path_str)
-            else:
-                stats['excluded_files'].append(path_str)
-                
-        # Categorize selected items
         for path_str in self.selected_items:
             path = Path(path_str)
             if path.is_dir():
                 stats['selected_dirs'].append(path_str)
             else:
                 stats['selected_files'].append(path_str)
-                
-        # Categorize partially selected items
-        for path_str in self.partially_selected_items:
-            path = Path(path_str)
-            if path.is_dir():
-                stats['partially_selected_dirs'].append(path_str)
                 
         return stats
     

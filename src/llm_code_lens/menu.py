@@ -172,6 +172,8 @@ class MenuState:
         self.edit_buffer = ""          # Buffer for text input
 
         # Simple initialization - just build the initial visible items
+        # Make sure root is expanded by default so we can see files
+        self.expanded_dirs.add(str(self.root_path))
         self.rebuild_visible_items()
         self._load_state()
 
@@ -244,10 +246,8 @@ class MenuState:
 
     def _build_item_list(self, path: Path, depth: int) -> None:
         """Fast build of visible items - Norton Commander style."""
-        print(f"Processing path: {path}")  # Debugging output
-
-        if path != self.root_path:  # Don't add root to list
-            self.visible_items.append((path, depth))
+        # Add the current path to visible items (including root for navigation)
+        self.visible_items.append((path, depth))
 
         # If it's a directory and it's expanded, add its children
         if path.is_dir() and str(path) in self.expanded_dirs:
@@ -257,10 +257,12 @@ class MenuState:
                               key=lambda p: (0 if p.is_dir() else 1, p.name.lower()))
 
                 for item in items:
-                    print(f"Adding item: {item}")  # Debugging output
-                    self._build_item_list(item, depth + 1)
-            except (PermissionError, OSError) as e:
-                print(f"Error processing directory {path}: {e}")
+                    # Skip items that should be ignored
+                    if not self.is_excluded(item):
+                        self._build_item_list(item, depth + 1)
+            except (PermissionError, OSError):
+                # Silently handle permission errors in TUI mode
+                pass
 
     def toggle_option(self, option_name: str) -> None:
         """Toggle a boolean option or cycle through value options."""

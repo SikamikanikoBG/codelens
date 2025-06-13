@@ -117,7 +117,7 @@ llmcl = "llm_code_lens.cli:main"
 
 [tool.black]
 line-length = 100
-target-version = ['py38']
+target-version = ['py312']  # Updated for Python 3.12 support
 include = '\.pyi?$'
 
 [tool.isort]
@@ -141,12 +141,12 @@ addopts = [
     "--cov=llm_code_lens",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=85"  # Slightly lower due to Tree-sitter integration complexity
+    "--cov-fail-under=85"  # Maintained at same level despite Tree-sitter integration
 ]
 
 # Tree-sitter specific configuration
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.12"  # Updated for Python 3.12 support
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

@@ -184,146 +184,20 @@ class MenuState:
             self.expanded_dirs.add(path_str)
         self.rebuild_visible_items()
             
-    def toggle_selection(self, path: Path, fully_select: bool = False) -> None:
-        """
-        Toggle selection status - update state only, no rescanning.
-
-        Args:
-            path: The path to toggle
-            fully_select: If True, fully select the directory and all children
-        """
+    def toggle_selection(self, path: Path) -> None:
+        """Simple Norton Commander style selection toggle."""
         path_str = str(path)
-
-        # Determine the current state
-        is_excluded = path_str in self.excluded_items
-        is_selected = path_str in self.selected_items
-        is_partially_selected = path_str in self.partially_selected_items
-
-        # If it's a directory, we'll need to handle all children
-        if path.is_dir():
-            # If item was excluded, move to partially selected or fully selected state
-            if is_excluded:
-                # Remove this directory from excluded
-                self.excluded_items.discard(path_str)
-
-                if fully_select:
-                    # Move to fully selected
-                    self.selected_items.add(path_str)
-                    self.partially_selected_items.discard(path_str)
-                    # Recursively include all children
-                    self._recursively_include(path)
-                else:
-                    # Move to partially selected
-                    self.partially_selected_items.add(path_str)
-                    self.selected_items.discard(path_str)
-                    # Expand the directory to show its contents
-                    self.expanded_dirs.add(path_str)
-
-                # Don't mark dirty - avoid immediate rescan
-                # self.dirty_scan = True  # REMOVED
-                
-            # If item was explicitly selected, move to excluded
-            elif is_selected:
-                # Remove from selected
-                self.selected_items.discard(path_str)
-                
-                # Add to excluded
-                self.excluded_items.add(path_str)
-                
-                # Recursively exclude all children
-                self._recursively_exclude(path)
-                
-                # Mark directory structure as dirty to force rescan
-                self.dirty_scan = True
-                
-            # If item was partially selected, toggle to fully selected or excluded
-            elif is_partially_selected:
-                # Remove from partially selected
-                self.partially_selected_items.discard(path_str)
-                
-                if fully_select:
-                    # Move to fully selected
-                    self.selected_items.add(path_str)
-                    # Recursively include all children
-                    self._recursively_include(path)
-                else:
-                    # Move to excluded
-                    self.excluded_items.add(path_str)
-                    # Recursively exclude all children
-                    self._recursively_exclude(path)
-                
-                # Mark directory structure as dirty to force rescan
-                self.dirty_scan = True
-                
-            # If item was neither excluded, selected, nor partially selected
-            else:
-                if fully_select:
-                    # Add to selected
-                    self.selected_items.add(path_str)
-                    # Recursively include all children
-                    self._recursively_include(path)
-                else:
-                    # Add to excluded
-                    self.excluded_items.add(path_str)
-                    # Recursively exclude all children
-                    self._recursively_exclude(path)
-                
-                # Mark directory structure as dirty to force rescan
-                self.dirty_scan = True
+        
+        if path_str in self.selected_items:
+            self.selected_items.remove(path_str)
+            self.status_message = f"Deselected: {path.name}"
         else:
-            # For files, toggle between excluded and included
-            if is_excluded:
-                self.excluded_items.discard(path_str)
-                self.selected_items.add(path_str)  # Explicitly select the file
-            elif is_selected:
-                self.selected_items.discard(path_str)
-                # If the file is in a common directory, exclude it by default
-                parent_is_common = any(path.parent.name == common for common in self.common_excludes)
-                if parent_is_common:
-                    self.excluded_items.add(path_str)
-            else:
-                self.excluded_items.add(path_str)
-            
-            # Update parent directory's selection state
-            self._update_parent_selection_state(path.parent)
-            
-            # Don't rescan immediately - just update state
-            # self.dirty_scan = True  # REMOVED
+            self.selected_items.add(path_str)
+            self.status_message = f"Selected: {path.name}"
 
     def is_selected(self, path: Path) -> bool:
         """Check if a path is selected."""
-        path_str = str(path)
-        
-        # If the item is explicitly selected, it's included
-        if path_str in self.selected_items:
-            return True
-            
-        # If the item is explicitly excluded or partially selected, it's not fully selected
-        if path_str in self.excluded_items or path_str in self.partially_selected_items:
-            return False
-            
-        # Check if any parent is explicitly excluded
-        current = path.parent
-        while current != self.root_path.parent:
-            parent_str = str(current)
-            if parent_str in self.excluded_items:
-                return False
-            if parent_str in self.selected_items:
-                return True
-            current = current.parent
-            
-        # Check for common directories that should be excluded by default
-        if path.is_dir() and path.name in self.common_excludes:
-            # Auto-exclude common directories unless they're explicitly selected or partially selected
-            if path_str not in self.selected_items and path_str not in self.partially_selected_items:
-                return False
-                
-        # For files in common directories, they're excluded by default
-        if path.parent.name in self.common_excludes and path_str not in self.selected_items:
-            return False
-            
-        # If not explicitly excluded and not in a common directory, it's included by default
-        return True
+        return str(path) in self.selected_items
         
     def is_partially_selected(self, path: Path) -> bool:
         """Check if a path is partially selected."""

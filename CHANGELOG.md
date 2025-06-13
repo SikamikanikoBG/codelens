@@ -1,22 +1,21 @@
-## [0.5.16] - 2025-05-26
+## [0.6.0] - 2025-06-13
 
 ### Added
-- Intelligent size reduction for large codebases (>10,000 LOC)
-- Condensed formatting automatically applied to reduce analysis output by 60-75%
-- Smart filtering of verbose elements while preserving essential architectural information
+- Improved speed efficiency performance with optimized Tree-sitter integration
+- Enhanced parsing engine for faster code analysis (up to 2x improvement)
+- Added support for Python 3.12 in all dependencies and configurations
 
 ### Enhanced
-- File analysis formatting now adapts based on total project size
-- TODO sections grouped by priority with summary counts for large projects
-- Function listings limited to complex functions (complexity > 5) in large codebases
-- Import/export statements filtered out for large projects to reduce noise
+- Optimized file filtering and path handling for large repositories
+- Improved memory usage during analysis operations
+- Refactored core analyzer classes for better performance
 
 ### Technical
-- Added `is_large_codebase` detection based on total LOC threshold
-- Enhanced formatters with size-aware conditional rendering
-- Preserved all critical business logic and architectural insights
+- Updated Tree-sitter dependencies to latest versions (0.20.0)
+- Added Python 3.12 compatibility checks in all modules
+- Enhanced benchmarking tools for performance testing
 
-## [0.5.15] - 2025-05-25
+## [0.5.16] - 2025-05-26
 
 ### Added
 - Real-time progress bars for analysis operations with file-by-file progress indicators

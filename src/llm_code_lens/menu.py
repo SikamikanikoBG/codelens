@@ -384,32 +384,15 @@ class MenuState:
         return stats
     
     def get_results(self) -> Dict[str, Any]:
-        """Get the final results of the selection process."""
-        # Process selection states to determine include and exclude paths
-        include_paths = [Path(p) for p in self.selected_items]
-        exclude_paths = [Path(p) for p in self.excluded_items]
-        
-        # Add partially selected directories to include_paths
-        # Their children will be filtered individually
-        for path_str in self.partially_selected_items:
-            path = Path(path_str)
-            if path not in include_paths:
-                include_paths.append(path)
-        
-        # Validate selection and log statistics if debug is enabled
-        validation_stats = self.validate_selection()
-        if self.options['debug']:
-            status_message = (
-                f"Selection validation: {validation_stats['excluded_count']} items excluded "
-                f"({len(validation_stats['excluded_dirs'])} directories, "
-                f"{len(validation_stats['excluded_files'])} files), "
-                f"{validation_stats['selected_count']} items explicitly included "
-                f"({len(validation_stats['selected_dirs'])} directories, "
-                f"{len(validation_stats['selected_files'])} files), "
-                f"{validation_stats['partially_selected_count']} items partially selected"
-            )
-            self.status_message = status_message
-            print(status_message)
+        """Get the final results - simple Norton Commander style."""
+        # Simple approach: if items are selected, use only those
+        # Otherwise, include everything except common excludes
+        if self.selected_items:
+            include_paths = [Path(p) for p in self.selected_items]
+            exclude_paths = []
+        else:
+            include_paths = [self.root_path]
+            exclude_paths = []
         
         # Save state for future runs
         if not self.cancelled:
@@ -429,7 +412,6 @@ class MenuState:
             'exclude': self.options['exclude_patterns'],
             'open_in_llm': self.options['llm_provider'],
             'llm_options': self.options['llm_options'],
-            'validation': validation_stats if self.options['debug'] else None,
             'cancelled': self.cancelled
         }
         

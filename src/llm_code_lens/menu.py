@@ -17,9 +17,7 @@ class MenuState:
         self.root_path = root_path.resolve()
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
-        self.selected_items: Set[str] = set()  # Items explicitly selected (overrides exclusions)
-        self.partially_selected_items: Set[str] = set()  # Items partially selected
-        self.excluded_items: Set[str] = set()  # Items explicitly excluded
+        self.selected_items: Set[str] = set()  # Simple binary selection: selected or not
         self.cursor_pos = 0
         self.scroll_offset = 0
         self.visible_items: List[Tuple[Path, int]] = []  # (path, depth)
@@ -39,18 +37,7 @@ class MenuState:
         # Check for updates
         self._check_for_updates()
         
-        # New flags for scanning optimization
-        self.scan_complete = False
-        self.dirty_scan = True  # Indicates directory structure needs rescanning
-        self.auto_exclude_complete = False  # Flag to prevent repeated auto-exclusion scans
-        
-        # Scanning progress tracking
-        self.scanning_in_progress = True  # Start in scanning state
-        self.scan_current_dir = ""
-        self.scan_progress = 0
-        self.scan_total = 0
-        self.cancel_scan_requested = False
-        self.status_message = "Initializing directory scan..."
+        self.status_message = "Ready"
         
         # Common directories to exclude by default
         self.common_excludes = [
@@ -184,21 +171,9 @@ class MenuState:
         self.editing_option = None     # Currently editing option (for text input)
         self.edit_buffer = ""          # Buffer for text input
         
-        # Immediately exclude common directories in the root and mark them properly
-        try:
-            for item in self.root_path.iterdir():
-                if item.is_dir() and item.name in self.common_excludes:
-                    self.excluded_items.add(str(item))
-                    # Also recursively exclude all children
-                    try:
-                        self._recursively_exclude_simple(item)
-                    except (PermissionError, OSError):
-                        pass
-        except (PermissionError, OSError):
-            pass
-
-        # Load saved state if available - will be done after scanning completes
-        # self._load_state()
+        # Simple initialization - just build the initial visible items
+        self.rebuild_visible_items()
+        self._load_state()
         
     def toggle_dir_expanded(self, path: Path) -> None:
         """Toggle directory expansion state."""

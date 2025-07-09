@@ -1133,7 +1133,17 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Open in LLM if requested and not 'none'
         if open_in_llm and open_in_llm.lower() != 'none':
             console.print(f"[bold blue]🌐 Opening results in {open_in_llm}...[/]")
-            if open_in_llm_provider(open_in_llm, output_path, debug, custom_llm_url):
+
+            # Get custom URL from menu settings if available
+            final_custom_url = custom_llm_url
+            if not final_custom_url and 'llm_options' in locals():
+                # Try to get from menu settings
+                try:
+                    final_custom_url = settings.get('custom_llm_url', '')
+                except:
+                    pass
+
+            if open_in_llm_provider(open_in_llm, output_path, debug, final_custom_url):
                 console.print(f"[bold green]✨ Results opened in {open_in_llm}![/]")
             else:
                 console.print(f"[yellow]Failed to open results in {open_in_llm}[/]")

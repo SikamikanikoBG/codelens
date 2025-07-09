@@ -15,6 +15,19 @@ class MenuState:
 
     def __init__(self, root_path: Path, initial_settings: Dict[str, Any] = None):
         self.root_path = root_path.resolve()
+
+        # DEBUG: Force clean state by removing any cached state with 'local'
+        try:
+            state_file = self.root_path / '.codelens' / 'menu_state.json'
+            if state_file.exists():
+                import json
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+                if state.get('options', {}).get('llm_provider') == 'local':
+                    print("DEBUG: Removing cached state with 'local' provider")
+                    state_file.unlink()
+        except Exception:
+            pass
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
         self.selected_items: Set[str] = set()  # Simple binary selection: selected or not
@@ -189,6 +202,12 @@ class MenuState:
             print(f"DEBUG: Found legacy 'local' provider, converting to 'custom'")
             self.options['llm_provider'] = 'custom'
 
+        # Ensure provider is valid
+        valid_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+        if self.options['llm_provider'] not in valid_providers:
+            print(f"DEBUG: Invalid provider '{self.options['llm_provider']}', resetting to 'claude'")
+            self.options['llm_provider'] = 'claude'
+
         if not state_loaded:
             # No saved state - auto-select all non-ignored files and folders
             self._auto_select_files()
@@ -305,8 +324,8 @@ class MenuState:
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
         elif option_name == 'llm_provider':
-            # Cycle through LLM provider options including 'none'
-            providers = list(self.options['llm_options']['providers'].keys()) + ['none']
+            # Ensure we have the correct provider list (no 'local')
+            correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
 
             # Handle legacy 'local' provider
             current_provider = self.options[option_name]
@@ -314,9 +333,9 @@ class MenuState:
                 current_provider = 'custom'
                 self.options[option_name] = 'custom'
 
-            current_index = providers.index(current_provider) if current_provider in providers else 0
-            next_index = (current_index + 1) % len(providers)
-            self.options[option_name] = providers[next_index]
+            current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+            next_index = (current_index + 1) % len(correct_providers)
+            self.options[option_name] = correct_providers[next_index]
 
             # If switching to custom, prompt for URL if not set
             if self.options[option_name] == 'custom' and not self.options['custom_llm_url']:
@@ -1110,7 +1129,24 @@ def handle_input(key: int, state: MenuState) -> bool:
             elif option_index == 5:  # SQL Database
                 state.start_editing_option('sql_database')
             elif option_index == 6:  # LLM Provider
-                state.toggle_option('llm_provider')
+                # Manually cycle through providers to avoid 'local'
+                correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+                current_provider = state.options['llm_provider']
+
+                # Handle legacy 'local' provider
+                if current_provider == 'local':
+                    current_provider = 'custom'
+                    state.options['llm_provider'] = 'custom'
+
+                current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+                next_index = (current_index + 1) % len(correct_providers)
+                state.options['llm_provider'] = correct_providers[next_index]
+
+                # If switching to custom, prompt for URL if not set
+                if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url']:
+                    state.start_editing_option('custom_llm_url')
+
+                state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
             elif option_index == 7:  # Custom LLM URL
                 state.start_editing_option('custom_llm_url')
             elif option_index == 8:  # Respect .gitignore
@@ -1134,7 +1170,24 @@ def handle_input(key: int, state: MenuState) -> bool:
     elif key == curses.KEY_F6:
         state.start_editing_option('sql_database')
     elif key == curses.KEY_F7:
-        state.toggle_option('llm_provider')
+        # Cycle through LLM providers manually to ensure no 'local'
+        correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+        current_provider = state.options['llm_provider']
+
+        # Handle legacy 'local' provider
+        if current_provider == 'local':
+            current_provider = 'custom'
+            state.options['llm_provider'] = 'custom'
+
+        current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+        next_index = (current_index + 1) % len(correct_providers)
+        state.options['llm_provider'] = correct_providers[next_index]
+
+        # If switching to custom, prompt for URL if not set
+        if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url']:
+            state.start_editing_option('custom_llm_url')
+
+        state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
     elif key == curses.KEY_F8:
         state.start_editing_option('custom_llm_url')
     elif key == curses.KEY_F9:

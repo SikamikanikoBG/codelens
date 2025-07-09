@@ -271,7 +271,7 @@ def _format_python_file(analysis: dict, is_large_codebase: bool = False) -> List
             else:
                 # Detailed format for small repos
                 sections.append(f"  {cls['name']}:")
-                if 'line_number' in cls:
+                if cls.get('line_number'):
                     sections.append(f"    Line: {cls['line_number']}")
                 if cls.get('bases'):
                     sections.append(f"    Inherits: {', '.join(cls['bases'])}")
@@ -352,7 +352,7 @@ def _format_python_file(analysis: dict, is_large_codebase: bool = False) -> List
             else:
                 # Detailed format for small repos
                 sections.append(f"  {func['name']}:")
-                if 'line_number' in func:
+                if func.get('line_number'):
                     sections.append(f"    Line: {func['line_number']}")
                 if func.get('args'):
                     # Handle both string and dict arguments
@@ -486,7 +486,7 @@ def _format_js_file(analysis: dict, is_large_codebase: bool = False) -> List[str
             for comp in components:
                 comp_type = comp.get('type', 'function')
                 jsx_status = ' (with JSX)' if comp.get('has_jsx') else ''
-                line_info = f' - Line {comp["line_number"]}' if not is_large_codebase else ''
+                line_info = f' - Line {comp.get("line_number", "?")}' if not is_large_codebase else ''
                 sections.append(f'      {comp["name"]} ({comp_type}{jsx_status}){line_info}')
 
     # React Hooks (condensed for large codebases)
@@ -498,7 +498,7 @@ def _format_js_file(analysis: dict, is_large_codebase: bool = False) -> List[str
         for hook in analysis['hooks']:
             hook_name = hook["name"]
             if not is_large_codebase:
-                hook_name += f' - Line {hook["line_number"]}'
+                hook_name += f' - Line {hook.get("line_number", "?")}'
             
             if hook.get('is_custom'):
                 custom_hooks.append(hook_name)
@@ -532,14 +532,14 @@ def _format_js_file(analysis: dict, is_large_codebase: bool = False) -> List[str
         else:
             for interface in interfaces:
                 extends_part = f' extends {interface["extends"]}' if interface.get('extends') else ''
-                line_info = f' - Line {interface["line_number"]}' if not is_large_codebase else ''
+                line_info = f' - Line {interface.get("line_number", "?")}' if not is_large_codebase else ''
                 sections.append(f'      {interface["name"]}{extends_part}{line_info}')
 
     # TypeScript Types (show only for small codebases)
     if analysis.get('types') and not is_large_codebase:
         sections.append('\n    TYPE ALIASES:')
         for type_def in analysis['types']:
-            sections.append(f'      {type_def["name"]} = {type_def["definition"]} - Line {type_def["line_number"]}')
+            sections.append(f'      {type_def["name"]} = {type_def.get("definition", "?")} - Line {type_def.get("line_number", "?")}')
 
     # Functions (limit for large codebases)
     if analysis.get('functions'):
@@ -568,7 +568,7 @@ def _format_js_file(analysis: dict, is_large_codebase: bool = False) -> List[str
                     func_signature += f": {func['return_type']}"
                 if func.get('is_async'):
                     func_signature = f"async {func_signature}"
-                sections.append(f"      {func_signature} - Line {func['line_number']}")
+                sections.append(f"      {func_signature} - Line {func.get('line_number', '?')}")
 
     # Classes (condensed for large codebases)
     if analysis.get('classes'):
@@ -583,7 +583,7 @@ def _format_js_file(analysis: dict, is_large_codebase: bool = False) -> List[str
         else:
             for cls in classes:
                 sections.append(f'      {cls["name"]}:')
-                if 'line_number' in cls and not is_large_codebase:
+                if cls.get('line_number') and not is_large_codebase:
                     sections.append(f'        Line: {cls["line_number"]}')
                 if cls.get('extends'):
                     sections.append(f'        Extends: {cls["extends"]}')

@@ -946,8 +946,21 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         # Run file system analysis with progress
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
-        
+
+        # Show warning for very large repositories
+        try:
+            total_files = sum(1 for _ in path.rglob('*') if _.is_file())
+            if total_files > 10000:
+                console.print(f"[yellow]Warning: Large repository detected ({total_files} files). Analysis may take a while or be limited.[/]")
+                console.print("[yellow]Consider using --exclude patterns or the interactive menu to select specific directories.[/]")
+            elif verbose:
+                console.print(f"[blue]Repository size: {total_files} files[/]")
+        except Exception:
+            pass  # Don't fail on this check
+
         analyzer = ProjectAnalyzer()
+        # Pass verbose flag to analyzer
+        analyzer.verbose = verbose
 
         # Pass include/exclude paths to analyzer if they were set in interactive mode
         if interactive and (include_paths or exclude_paths):

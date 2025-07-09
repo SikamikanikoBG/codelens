@@ -852,11 +852,13 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
             format = settings.get('format', format)
             full = settings.get('full', full)
             debug = settings.get('debug', debug)
+            verbose = settings.get('verbose', verbose)
             sql_server = settings.get('sql_server', sql_server)
             sql_database = settings.get('sql_database', sql_database)
             sql_config = settings.get('sql_config', sql_config)
             exclude = settings.get('exclude', exclude)
             open_in_llm = settings.get('open_in_llm', open_in_llm)
+            custom_llm_url = settings.get('custom_llm_url', '')
 
             if debug:
                 console.print(f"[blue]Selected path: {path}[/]")

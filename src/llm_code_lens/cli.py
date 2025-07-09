@@ -738,6 +738,7 @@ In my next message, I'll tell you about a new request or question about this cod
             # Handle custom LLM provider
             if not custom_url:
                 console.print("[red]Error: Custom LLM provider selected but no URL provided[/]")
+                console.print("[yellow]Please set the Custom LLM URL in the options menu (F8)[/]")
                 return False
 
             try:
@@ -755,17 +756,23 @@ In my next message, I'll tell you about a new request or question about this cod
                     webbrowser.open(custom_llm_url)
                     console.print(f"[green]Custom LLM opened at {custom_url} with content pre-loaded.[/]")
                     console.print("[green]The content has also been copied to your clipboard as a backup.[/]")
+                    if debug:
+                        console.print(f"[blue]Full URL: {custom_llm_url}[/]")
                 else:
                     # Fallback to clipboard only
                     webbrowser.open(custom_url)
                     console.print(f"[green]Custom LLM opened at {custom_url}.[/]")
-                    console.print("[green]Content is too large for URL parameters.[/]")
+                    console.print("[green]Content is too large for URL parameters (browser limitations).[/]")
                     console.print("[green]The complete analysis has been copied to your clipboard.[/]")
                     console.print("[green]Press Ctrl+V to paste the content.[/]")
+                    if debug:
+                        console.print(f"[blue]URL parameter length: {len(encoded_message)} characters[/]")
 
                 return True
             except Exception as e:
                 console.print(f"[red]Error opening custom LLM: {str(e)}[/]")
+                if debug:
+                    console.print(f"[blue]URL attempted: {custom_url}[/]")
                 return False
 
         else:

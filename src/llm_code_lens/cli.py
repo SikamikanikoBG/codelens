@@ -581,7 +581,7 @@ def _combine_sql_results(combined: dict, sql_result: dict) -> None:
         key = f"function_{func['name']}"
         combined['files'][key] = func
 
-def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False) -> bool:
+def open_in_llm_provider(provider: str, output_path: Path, debug: bool = False, custom_url: str = None) -> bool:
     """
     Open the analysis results in a browser with the specified LLM provider.
 
@@ -733,6 +733,40 @@ In my next message, I'll tell you about a new request or question about this cod
             console.print("[green]The complete analysis with all files has been copied to your clipboard.[/]")
             console.print("[green]Just press Ctrl+V in Gemini to paste everything at once![/]")
             return True
+
+        elif provider.lower() == 'custom':
+            # Handle custom LLM provider
+            if not custom_url:
+                console.print("[red]Error: Custom LLM provider selected but no URL provided[/]")
+                return False
+
+            try:
+                # Try to use query parameter approach like ChatGPT
+                encoded_message = urllib.parse.quote(full_message)
+
+                # Check if the URL would be too long
+                if len(encoded_message) <= 2000:
+                    # Try with query parameter
+                    if '?' in custom_url:
+                        custom_llm_url = f"{custom_url}&q={encoded_message}"
+                    else:
+                        custom_llm_url = f"{custom_url}?q={encoded_message}"
+
+                    webbrowser.open(custom_llm_url)
+                    console.print(f"[green]Custom LLM opened at {custom_url} with content pre-loaded.[/]")
+                    console.print("[green]The content has also been copied to your clipboard as a backup.[/]")
+                else:
+                    # Fallback to clipboard only
+                    webbrowser.open(custom_url)
+                    console.print(f"[green]Custom LLM opened at {custom_url}.[/]")
+                    console.print("[green]Content is too large for URL parameters.[/]")
+                    console.print("[green]The complete analysis has been copied to your clipboard.[/]")
+                    console.print("[green]Press Ctrl+V to paste the content.[/]")
+
+                return True
+            except Exception as e:
+                console.print(f"[red]Error opening custom LLM: {str(e)}[/]")
+                return False
 
         else:
             console.print(f"[yellow]Unsupported LLM provider: {provider}[/]")
@@ -971,12 +1005,17 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                     else:
                         excluded_files.append((str(file_path), exclusion_reason))
 
-                # Debug output
-                if debug:
-                    console.print(f"[blue]Ultra-fast file collection results:[/]")
+                # Debug output - ALWAYS show for large repo debugging
+                if verbose or debug:
+                    console.print(f"[blue]File collection results:[/]")
                     console.print(f"[blue]- Total files found: {len(files)}[/]")
                     console.print(f"[blue]- Files included: {len(filtered_files)}[/]")
                     console.print(f"[blue]- Files excluded: {len(excluded_files)}[/]")
+
+                    # Show file type breakdown
+                    from collections import Counter
+                    extensions = Counter(f.suffix for f in filtered_files)
+                    console.print(f"[blue]- File types to analyze: {dict(extensions)}[/]")
 
                     if excluded_files:
                         console.print("[blue]Sample excluded files:[/]")
@@ -984,6 +1023,11 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
                             console.print(f"[blue]  {i+1}. {Path(file).name} - {reason}[/]")
                         if len(excluded_files) > 3:
                             console.print(f"[blue]  ... and {len(excluded_files) - 3} more[/]")
+
+                    # Show warning if we hit limits
+                    if len(files) >= 5000:
+                        console.print(f"[yellow]WARNING: File collection was limited to 5000 files[/]")
+                        console.print(f"[yellow]Consider using more specific include/exclude patterns[/]")
 
                 return filtered_files
 
@@ -1015,8 +1059,10 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Combine results
         combined_results = _combine_results(results)
 
-        if debug:
+        if debug or verbose:
             console.print("[blue]Analysis complete, writing results...[/]")
+            console.print(f"[blue]Total files analyzed: {len(combined_results.files)}[/]")
+            console.print(f"[blue]Total lines of code: {combined_results.summary['project_stats']['lines_of_code']}[/]")
 
         # Write results
         result_file = output_path / f'analysis.{format}'
@@ -1074,12 +1120,15 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
 
         return 0
 
+    except KeyboardInterrupt:
+        console.print("[yellow]Analysis interrupted by user[/]")
+        return 1
     except Exception as e:
-        console.print("[bold red]Error occurred:[/]")
-        if debug:
+        console.print("[bold red]Unexpected error occurred:[/]")
+        # Always show full traceback for debugging large repo issues
+        if debug or verbose:
             console.print(traceback.format_exc())
-        else:
-            console.print(f"[bold red]Error: {str(e)}[/]")
+        console.print(f"[bold red]Error: {str(e)}[/]")
         return 1
 
 if __name__ == '__main__':

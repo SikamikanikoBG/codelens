@@ -791,9 +791,10 @@ In my next message, I'll tell you about a new request or question about this cod
 @click.option('--interactive', '-i', is_flag=True, help='Launch interactive selection menu before analysis', default=True, show_default=False)
 @click.option('--open-in-llm', help='Open results in LLM provider (claude, chatgpt, gemini, none)', default=None)
 @click.option('--respect-gitignore/--ignore-gitignore', default=True, help='Respect .gitignore file patterns (default: enabled)')  # NEW OPTION
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose debug output')
 def main(path: str, output: str, format: str, full: bool, debug: bool,
          sql_server: str, sql_database: str, sql_config: str, exclude: tuple,
-         interactive: bool = True, open_in_llm: str = None, respect_gitignore: bool = True):  # NEW PARAMETER
+         interactive: bool = True, open_in_llm: str = None, respect_gitignore: bool = True, verbose: bool = False):  # NEW PARAMETER
     """
     Main entry point for the CLI with gitignore support.
     """

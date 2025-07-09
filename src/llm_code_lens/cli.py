@@ -957,14 +957,15 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Run file system analysis with progress
         console.print("[bold blue]📁 Starting File System Analysis...[/]")
 
-        # Show warning for very large repositories
+        # Show repository size information based on files that will actually be analyzed
         try:
-            total_files = sum(1 for _ in path.rglob('*') if _.is_file())
-            if total_files > 10000:
-                console.print(f"[yellow]Warning: Large repository detected ({total_files} files). Analysis may take a while or be limited.[/]")
-                console.print("[yellow]Consider using --exclude patterns or the interactive menu to select specific directories.[/]")
-            elif verbose:
-                console.print(f"[blue]Repository size: {total_files} files[/]")
+            if verbose:
+                # Count only files that will be analyzed (after filtering)
+                analyzable_files = 0
+                for file_path in path.rglob('*'):
+                    if file_path.is_file() and not should_ignore(file_path, list(exclude)) and not is_binary(file_path):
+                        analyzable_files += 1
+                console.print(f"[blue]Repository size: {analyzable_files} analyzable files[/]")
         except Exception:
             pass  # Don't fail on this check
 

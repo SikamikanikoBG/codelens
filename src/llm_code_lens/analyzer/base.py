@@ -217,7 +217,7 @@ class ProjectAnalyzer:
                     # Store file analysis
                     analysis['files'][str_path] = file_analysis
 
-                    # Update metrics
+                    # Update metrics only for files that pass all filtering
                     self._update_metrics(analysis, file_analysis, str_path)
                     processed_files += 1
 
@@ -270,6 +270,8 @@ class ProjectAnalyzer:
         if verbose:
             print(f"DEBUG: Analysis completed in {duration:.2f} seconds")
             print(f"DEBUG: Analyzed {len(analysis['files'])} files successfully")
+            print(f"DEBUG: Total LOC in analyzed files: {analysis['summary']['project_stats']['lines_of_code']}")
+            print(f"DEBUG: Average file size: {analysis['summary']['project_stats']['lines_of_code']/max(processed_files, 1):.1f} lines")
             print(f"DEBUG: Average time per file: {duration/max(processed_files, 1):.3f}s")
 
         return AnalysisResult(**analysis)

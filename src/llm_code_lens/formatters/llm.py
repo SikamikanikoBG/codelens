@@ -4,10 +4,14 @@ from ..analyzer.base import AnalysisResult
 def format_analysis(result: AnalysisResult) -> str:
     """Format analysis results with tree structure."""
     sections = []
-    
-    # Determine if this is a large codebase (>10K LOC)
+
+    # Determine if this is a large codebase based on actually analyzed files
     total_loc = result.summary['project_stats']['lines_of_code']
-    is_large_codebase = total_loc > 10000
+    total_files = result.summary['project_stats']['total_files']
+
+    # Use more reasonable thresholds - only trigger large codebase mode for truly large projects
+    # Also consider file count to avoid false positives from a few large files
+    is_large_codebase = total_loc > 50000 and total_files > 500
 
     # Add system information at the top
     import platform

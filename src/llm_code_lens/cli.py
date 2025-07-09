@@ -1126,7 +1126,7 @@ def main(path: str, output: str, format: str, full: bool, debug: bool,
         # Open in LLM if requested and not 'none'
         if open_in_llm and open_in_llm.lower() != 'none':
             console.print(f"[bold blue]🌐 Opening results in {open_in_llm}...[/]")
-            if open_in_llm_provider(open_in_llm, output_path, debug):
+            if open_in_llm_provider(open_in_llm, output_path, debug, custom_llm_url):
                 console.print(f"[bold green]✨ Results opened in {open_in_llm}![/]")
             else:
                 console.print(f"[yellow]Failed to open results in {open_in_llm}[/]")

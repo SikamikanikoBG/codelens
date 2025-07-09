@@ -2,6 +2,8 @@
 
 ### Added
 - Bumped version to 0.6.1
+- Added Verbose option for detailed debugging
+- Added custome LLM provider
 
 ### Enhanced
 - Updated version information in all relevant files

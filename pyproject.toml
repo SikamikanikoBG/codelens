@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llm_code_lens"
-version = "0.6.0"  # Bumped for Tree-sitter performance upgrade
+version = "0.6.1"  # Bumped for Tree-sitter performance upgrade
 description = "Ultra-fast intelligent code analysis tool for LLM context generation with Tree-sitter"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -34,7 +34,7 @@ def check_for_newer_version() -> None:
 
 def _get_current_version() -> str:
     """Get the current package version."""
-    return __version__
+    return "0.6.1"
 
 def _get_latest_version() -> Tuple[Optional[str], str]:
     """

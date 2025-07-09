@@ -1,3 +1,14 @@
+## [0.6.1] - 2025-06-14
+
+### Added
+- Bumped version to 0.6.1
+
+### Enhanced
+- Updated version information in all relevant files
+
+### Technical
+- Ensured consistency across all version references
+
 ## [0.6.0] - 2025-06-13
 
 ### Added

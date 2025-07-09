@@ -306,6 +306,10 @@ class MenuState:
             if self.options[option_name] == 'custom' and not self.options['custom_llm_url']:
                 self.start_editing_option('custom_llm_url')
 
+            # Update the custom provider URL in llm_options
+            if self.options[option_name] == 'custom':
+                self.options['llm_options']['providers']['custom']['url'] = self.options['custom_llm_url']
+
         elif isinstance(self.options[option_name], bool):
             # Toggle boolean options
             self.options[option_name] = not self.options[option_name]
@@ -336,6 +340,14 @@ class MenuState:
                 # Normal option
                 self.options[self.editing_option] = self.edit_buffer
                 self.status_message = f"Option '{self.editing_option}' set to: {self.edit_buffer}"
+
+                # Special handling for custom_llm_url - sync with providers
+                if self.editing_option == 'custom_llm_url':
+                    self.options['llm_options']['providers']['custom']['url'] = self.edit_buffer
+                    # Auto-switch to custom provider if URL is set
+                    if self.edit_buffer.strip():
+                        self.options['llm_provider'] = 'custom'
+                        self.status_message = f"Custom LLM URL set to: {self.edit_buffer} (Provider switched to custom)"
 
         self.editing_option = None
         self.edit_buffer = ""

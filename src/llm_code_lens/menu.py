@@ -15,6 +15,19 @@ class MenuState:
 
     def __init__(self, root_path: Path, initial_settings: Dict[str, Any] = None):
         self.root_path = root_path.resolve()
+
+        # DEBUG: Force clean state by removing any cached state with 'local'
+        try:
+            state_file = self.root_path / '.codelens' / 'menu_state.json'
+            if state_file.exists():
+                import json
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+                if state.get('options', {}).get('llm_provider') == 'local':
+                    print("DEBUG: Removing cached state with 'local' provider")
+                    state_file.unlink()
+        except Exception:
+            pass
         self.current_path = self.root_path
         self.expanded_dirs: Set[str] = set()
         self.selected_items: Set[str] = set()  # Simple binary selection: selected or not
@@ -107,12 +120,14 @@ class MenuState:
             'format': 'txt',           # Output format (txt or json)
             'full': False,             # Export full file contents
             'debug': False,            # Enable debug output
+            'verbose': False,          # Enable verbose debug output
             'sql_server': '',          # SQL Server connection string
             'sql_database': '',        # SQL Database to analyze
             'sql_config': '',          # Path to SQL configuration file
             'exclude_patterns': [],    # Patterns to exclude
             'llm_provider': 'claude',  # Default LLM provider
-            'respect_gitignore': True,  # NEW OPTION
+            'custom_llm_url': '',      # Custom LLM URL
+            'respect_gitignore': True, # Respect .gitignore patterns
             'llm_options': {           # LLM provider-specific options
                 'provider': 'claude',  # Current provider
                 'prompt_template': 'code_analysis',  # Current template
@@ -135,14 +150,14 @@ class MenuState:
                         'temperature': 0.7,
                         'max_tokens': 4000
                     },
-                    'local': {
-                        'url': 'http://localhost:8000',
-                        'model': 'llama3',
+                    'custom': {
+                        'url': '',
+                        'model': 'custom',
                         'temperature': 0.7,
                         'max_tokens': 4000
                     }
                 },
-                'available_providers': ['claude', 'chatgpt', 'gemini', 'local', 'none'],
+                'available_providers': ['claude', 'chatgpt', 'gemini', 'custom', 'none'],
                 'prompt_templates': {
                     'code_analysis': 'Analyze this code and provide feedback on structure, potential bugs, and improvements:\n\n{code}',
                     'security_review': 'Review this code for security vulnerabilities and suggest fixes:\n\n{code}',
@@ -163,6 +178,9 @@ class MenuState:
         if initial_settings:
             for key, value in initial_settings.items():
                 if key in self.options:
+                    # Migration: convert 'local' to 'custom' for backward compatibility
+                    if key == 'llm_provider' and value == 'local':
+                        value = 'custom'
                     self.options[key] = value
 
         # UI state
@@ -178,6 +196,18 @@ class MenuState:
 
         # Load saved state first, then auto-select if no saved state exists
         state_loaded = self._load_state()
+
+        # Debug: Check if we have legacy 'local' provider
+        if self.options['llm_provider'] == 'local':
+            print(f"DEBUG: Found legacy 'local' provider, converting to 'custom'")
+            self.options['llm_provider'] = 'custom'
+
+        # Ensure provider is valid
+        valid_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+        if self.options['llm_provider'] not in valid_providers:
+            print(f"DEBUG: Invalid provider '{self.options['llm_provider']}', resetting to 'claude'")
+            self.options['llm_provider'] = 'claude'
+
         if not state_loaded:
             # No saved state - auto-select all non-ignored files and folders
             self._auto_select_files()
@@ -294,11 +324,27 @@ class MenuState:
             # Cycle through format options
             self.options[option_name] = 'json' if self.options[option_name] == 'txt' else 'txt'
         elif option_name == 'llm_provider':
-            # Cycle through LLM provider options including 'none'
-            providers = list(self.options['llm_options']['providers'].keys()) + ['none']
-            current_index = providers.index(self.options[option_name]) if self.options[option_name] in providers else 0
-            next_index = (current_index + 1) % len(providers)
-            self.options[option_name] = providers[next_index]
+            # Ensure we have the correct provider list (no 'local')
+            correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+
+            # Handle legacy 'local' provider
+            current_provider = self.options[option_name]
+            if current_provider == 'local':
+                current_provider = 'custom'
+                self.options[option_name] = 'custom'
+
+            current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+            next_index = (current_index + 1) % len(correct_providers)
+            self.options[option_name] = correct_providers[next_index]
+
+            # If switching to custom, prompt for URL if not set
+            if self.options[option_name] == 'custom' and not self.options['custom_llm_url']:
+                self.start_editing_option('custom_llm_url')
+
+            # Update the custom provider URL in llm_options
+            if self.options[option_name] == 'custom':
+                self.options['llm_options']['providers']['custom']['url'] = self.options['custom_llm_url']
+
         elif isinstance(self.options[option_name], bool):
             # Toggle boolean options
             self.options[option_name] = not self.options[option_name]
@@ -330,6 +376,14 @@ class MenuState:
                 self.options[self.editing_option] = self.edit_buffer
                 self.status_message = f"Option '{self.editing_option}' set to: {self.edit_buffer}"
 
+                # Special handling for custom_llm_url - sync with providers
+                if self.editing_option == 'custom_llm_url':
+                    self.options['llm_options']['providers']['custom']['url'] = self.edit_buffer
+                    # Auto-switch to custom provider if URL is set
+                    if self.edit_buffer.strip():
+                        self.options['llm_provider'] = 'custom'
+                        self.status_message = f"Custom LLM URL set to: {self.edit_buffer} (Provider switched to custom)"
+
         self.editing_option = None
         self.edit_buffer = ""
 
@@ -358,7 +412,7 @@ class MenuState:
     def move_option_cursor(self, direction: int) -> None:
         """Move the cursor in the options section."""
         # Count total options (fixed options + exclude patterns)
-        total_options = 6 + len(self.options['exclude_patterns'])  # 6 fixed options + exclude patterns
+        total_options = 9 + len(self.options['exclude_patterns'])  # 9 fixed options + exclude patterns
 
         new_pos = self.option_cursor + direction
         if 0 <= new_pos < total_options:
@@ -404,11 +458,13 @@ class MenuState:
             'format': self.options['format'],
             'full': self.options['full'],
             'debug': self.options['debug'],
+            'verbose': self.options['verbose'],
             'sql_server': self.options['sql_server'],
             'sql_database': self.options['sql_database'],
             'sql_config': self.options['sql_config'],
             'exclude': self.options['exclude_patterns'],
             'open_in_llm': self.options['llm_provider'],
+            'custom_llm_url': self.options['custom_llm_url'],
             'llm_options': self.options['llm_options'],
             'cancelled': self.cancelled
         }
@@ -604,6 +660,9 @@ class MenuState:
                 if 'options' in state:
                     for key, value in state['options'].items():
                         if key in self.options:
+                            # Migration: convert 'local' to 'custom' for backward compatibility
+                            if key == 'llm_provider' and value == 'local':
+                                value = 'custom'
                             self.options[key] = value
 
                 # Set status message to indicate loaded state
@@ -785,10 +844,12 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Format", f"{state.options['format']}", "F1"),
             ("Full Export", f"{state.options['full']}", "F2"),
             ("Debug Mode", f"{state.options['debug']}", "F3"),
-            ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
-            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5"),
-            ("LLM Provider", f"{state.options['llm_provider']}", "F6"),
-            ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F7")  # NEW OPTION
+            ("Verbose Mode", f"{state.options['verbose']}", "F4"),
+            ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F5"),
+            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F6"),
+            ("LLM Provider", f"{state.options['llm_provider']}" + (" (needs URL)" if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url'] else ""), "F7"),
+            ("Custom LLM URL", f"{state.options['custom_llm_url'] or 'Not set'}", "F8"),
+            ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F9")
         ]
 
         # Add exclude patterns
@@ -1061,17 +1122,38 @@ def handle_input(key: int, state: MenuState) -> bool:
                 state.toggle_option('full')
             elif option_index == 2:  # Debug Mode
                 state.toggle_option('debug')
-            elif option_index == 3:  # SQL Server
+            elif option_index == 3:  # Verbose Mode
+                state.toggle_option('verbose')
+            elif option_index == 4:  # SQL Server
                 state.start_editing_option('sql_server')
-            elif option_index == 4:  # SQL Database
+            elif option_index == 5:  # SQL Database
                 state.start_editing_option('sql_database')
-            elif option_index == 5:  # LLM Provider
-                state.toggle_option('llm_provider')
-            elif option_index == 6:  # Respect .gitignore
+            elif option_index == 6:  # LLM Provider
+                # Manually cycle through providers to avoid 'local'
+                correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+                current_provider = state.options['llm_provider']
+
+                # Handle legacy 'local' provider
+                if current_provider == 'local':
+                    current_provider = 'custom'
+                    state.options['llm_provider'] = 'custom'
+
+                current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+                next_index = (current_index + 1) % len(correct_providers)
+                state.options['llm_provider'] = correct_providers[next_index]
+
+                # If switching to custom, prompt for URL if not set
+                if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url']:
+                    state.start_editing_option('custom_llm_url')
+
+                state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+            elif option_index == 7:  # Custom LLM URL
+                state.start_editing_option('custom_llm_url')
+            elif option_index == 8:  # Respect .gitignore
                 state.toggle_option('respect_gitignore')
-            elif option_index >= 7 and option_index < 7 + len(state.options['exclude_patterns']):
+            elif option_index >= 9 and option_index < 9 + len(state.options['exclude_patterns']):
                 # Remove exclude pattern
-                pattern_index = option_index - 7
+                pattern_index = option_index - 9
                 state.remove_exclude_pattern(pattern_index)
 
     # Function key controls (work in any section)
@@ -1082,20 +1164,35 @@ def handle_input(key: int, state: MenuState) -> bool:
     elif key == curses.KEY_F3:
         state.toggle_option('debug')
     elif key == curses.KEY_F4:
-        state.start_editing_option('sql_server')
+        state.toggle_option('verbose')
     elif key == curses.KEY_F5:
-        state.start_editing_option('sql_database')
+        state.start_editing_option('sql_server')
     elif key == curses.KEY_F6:
-        # Cycle through available LLM providers including 'none'
-        providers = list(state.options['llm_options']['providers'].keys()) + ['none']
-        current_index = providers.index(state.options['llm_provider']) if state.options['llm_provider'] in providers else 0
-        next_index = (current_index + 1) % len(providers)
-        state.options['llm_provider'] = providers[next_index]
-        state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
+        state.start_editing_option('sql_database')
     elif key == curses.KEY_F7:
-        # Toggle gitignore respect
-        state.toggle_option('respect_gitignore')
+        # Cycle through LLM providers manually to ensure no 'local'
+        correct_providers = ['claude', 'chatgpt', 'gemini', 'custom', 'none']
+        current_provider = state.options['llm_provider']
+
+        # Handle legacy 'local' provider
+        if current_provider == 'local':
+            current_provider = 'custom'
+            state.options['llm_provider'] = 'custom'
+
+        current_index = correct_providers.index(current_provider) if current_provider in correct_providers else 0
+        next_index = (current_index + 1) % len(correct_providers)
+        state.options['llm_provider'] = correct_providers[next_index]
+
+        # If switching to custom, prompt for URL if not set
+        if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url']:
+            state.start_editing_option('custom_llm_url')
+
+        state.status_message = f"LLM Provider set to: {state.options['llm_provider']}"
     elif key == curses.KEY_F8:
+        state.start_editing_option('custom_llm_url')
+    elif key == curses.KEY_F9:
+        state.toggle_option('respect_gitignore')
+    elif key == curses.KEY_F10:
         # Show update dialog if updates are available
         if state.new_version_available:
             state.show_update_dialog = True

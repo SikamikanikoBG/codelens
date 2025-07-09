@@ -3,6 +3,27 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import os
+import signal
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def timeout(duration):
+    """Context manager for timing out operations."""
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Analysis timed out after {duration} seconds")
+
+    # Only use signal on Unix-like systems
+    if hasattr(signal, 'SIGALRM'):
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(duration)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+    else:
+        # On Windows, just yield without timeout
+        yield
 
 @dataclass
 class AnalysisResult:
@@ -91,6 +112,12 @@ class ProjectAnalyzer:
 
     def analyze(self, path: Path) -> AnalysisResult:
         """Analyze entire project directory."""
+        start_time = time.time()
+        verbose = getattr(self, 'verbose', False)
+
+        if verbose:
+            print(f"DEBUG: Starting analysis of {path}")
+
         # Initialize analysis structure
         analysis = {
             'summary': {
@@ -131,11 +158,28 @@ class ProjectAnalyzer:
         # Collect and process files
         files_to_analyze = self._collect_files(path)
         processed_files = 0
+        verbose = getattr(self, 'verbose', False)
+
+        # Progress tracking
+        if hasattr(self, 'progress'):
+            file_task = self.progress.add_task("Processing files...", total=len(files_to_analyze))
+            if verbose:
+                print(f"DEBUG: Progress task created for {len(files_to_analyze)} files")
 
         for file_path in files_to_analyze:
             if not file_path.is_file():
+                if verbose:
+                    print(f"DEBUG: Skipping non-file: {file_path}")
                 continue
-                
+
+            # Check if file is accessible
+            try:
+                file_path.stat()
+            except (OSError, PermissionError) as e:
+                if verbose:
+                    print(f"DEBUG: Cannot access file {file_path}: {e}")
+                continue
+
             analyzer = self.analyzers.get(file_path.suffix.lower())
             if analyzer:
                 try:
@@ -143,15 +187,26 @@ class ProjectAnalyzer:
                     if hasattr(self, 'progress'):
                         self.progress.update(file_task, description=f"Analyzing: {file_path.name}")
 
-                    file_analysis = analyzer.analyze_file(file_path)
+                    # Add timeout for large/complex files
+                    try:
+                        with timeout(30):  # 30 second timeout per file
+                            file_analysis = analyzer.analyze_file(file_path)
+                    except TimeoutError:
+                        print(f"WARNING: Analysis of {file_path} timed out after 30 seconds - skipping")
+                        continue
+
                     str_path = str(file_path)
 
                     # Validate analysis
                     if not isinstance(file_analysis, dict) or 'type' not in file_analysis:
+                        if verbose:
+                            print(f"DEBUG: Invalid analysis result for {file_path}")
                         continue
 
                     # Skip files with errors unless they have partial results
                     if 'errors' in file_analysis and not file_analysis.get('metrics', {}).get('loc', 0):
+                        if verbose:
+                            print(f"DEBUG: Skipping {file_path} due to errors without results")
                         continue
 
                     # Update file types count
@@ -162,17 +217,31 @@ class ProjectAnalyzer:
                     # Store file analysis
                     analysis['files'][str_path] = file_analysis
 
-                    # Update metrics
+                    # Update metrics only for files that pass all filtering
                     self._update_metrics(analysis, file_analysis, str_path)
                     processed_files += 1
 
+                    if verbose and processed_files % 100 == 0:
+                        print(f"DEBUG: Processed {processed_files} files so far...")
+
                 except Exception as e:
+                    # Always show errors for large repo debugging
+                    print(f"ERROR analyzing {file_path}: {e}")
                     if hasattr(self, 'debug') and self.debug:
-                        print(f"Error analyzing {file_path}: {e}")
+                        import traceback
+                        print(traceback.format_exc())
                     continue
 
         # Update final count
         analysis['summary']['project_stats']['total_files'] = processed_files
+
+        # Debug: Show completion stats
+        if verbose:
+            print(f"DEBUG: Processed {processed_files} out of {len(files_to_analyze)} files")
+
+        if processed_files < len(files_to_analyze):
+            skipped = len(files_to_analyze) - processed_files
+            print(f"WARNING: {skipped} files were skipped during analysis!")
 
         # Generate project tree
         if hasattr(self, 'progress'):
@@ -195,26 +264,52 @@ class ProjectAnalyzer:
         # Generate insights
         analysis['insights'] = self._generate_insights(analysis)
 
+        end_time = time.time()
+        duration = end_time - start_time
+
+        if verbose:
+            print(f"DEBUG: Analysis completed in {duration:.2f} seconds")
+            print(f"DEBUG: Analyzed {len(analysis['files'])} files successfully")
+            print(f"DEBUG: Total LOC in analyzed files: {analysis['summary']['project_stats']['lines_of_code']}")
+            print(f"DEBUG: Average file size: {analysis['summary']['project_stats']['lines_of_code']/max(processed_files, 1):.1f} lines")
+            print(f"DEBUG: Average time per file: {duration/max(processed_files, 1):.3f}s")
+
         return AnalysisResult(**analysis)
 
     def _collect_files(self, path: Path) -> List[Path]:
-        """Collect files to analyze."""
+        """Collect files to analyze with limits for large repositories."""
         files = []
         supported_extensions = set(self.analyzers.keys())
-        
+        max_files = 5000  # Limit for large repositories
+        verbose = getattr(self, 'verbose', False)
+
         for root, dirs, filenames in os.walk(str(path)):
+            # Stop if we've reached the file limit
+            if len(files) >= max_files:
+                print(f"WARNING: Reached file limit of {max_files} files. Consider using more specific include/exclude patterns.")
+                break
+
             # Skip common ignored directories
             dirs[:] = [d for d in dirs if not d.startswith('.') and d not in {
                 'node_modules', '__pycache__', 'venv', 'env', 'dist', 'build'
             }]
-            
+
             root_path = Path(root)
             for filename in filenames:
+                if len(files) >= max_files:
+                    break
+
                 file_path = root_path / filename
-                
+
                 if file_path.suffix.lower() in supported_extensions:
                     files.append(file_path)
-        
+
+        if verbose:
+            print(f"DEBUG: Found {len(files)} files to analyze")
+            from collections import Counter
+            extensions = Counter(f.suffix for f in files)
+            print(f"DEBUG: File types: {dict(extensions)}")
+
         return files
 
     def _update_metrics(self, analysis: dict, file_analysis: dict, file_path: str) -> None:

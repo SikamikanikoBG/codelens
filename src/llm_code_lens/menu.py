@@ -794,10 +794,12 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Format", f"{state.options['format']}", "F1"),
             ("Full Export", f"{state.options['full']}", "F2"),
             ("Debug Mode", f"{state.options['debug']}", "F3"),
-            ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F4"),
-            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F5"),
-            ("LLM Provider", f"{state.options['llm_provider']}", "F6"),
-            ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F7")  # NEW OPTION
+            ("Verbose Mode", f"{state.options['verbose']}", "F4"),
+            ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F5"),
+            ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F6"),
+            ("LLM Provider", f"{state.options['llm_provider']}", "F7"),
+            ("Custom LLM URL", f"{state.options['custom_llm_url'] or 'Not set'}", "F8"),
+            ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F9")
         ]
 
         # Add exclude patterns

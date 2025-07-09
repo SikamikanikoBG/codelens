@@ -165,6 +165,9 @@ class MenuState:
         if initial_settings:
             for key, value in initial_settings.items():
                 if key in self.options:
+                    # Migration: convert 'local' to 'custom' for backward compatibility
+                    if key == 'llm_provider' and value == 'local':
+                        value = 'custom'
                     self.options[key] = value
 
         # UI state
@@ -180,6 +183,12 @@ class MenuState:
 
         # Load saved state first, then auto-select if no saved state exists
         state_loaded = self._load_state()
+
+        # Debug: Check if we have legacy 'local' provider
+        if self.options['llm_provider'] == 'local':
+            print(f"DEBUG: Found legacy 'local' provider, converting to 'custom'")
+            self.options['llm_provider'] = 'custom'
+
         if not state_loaded:
             # No saved state - auto-select all non-ignored files and folders
             self._auto_select_files()
@@ -298,7 +307,14 @@ class MenuState:
         elif option_name == 'llm_provider':
             # Cycle through LLM provider options including 'none'
             providers = list(self.options['llm_options']['providers'].keys()) + ['none']
-            current_index = providers.index(self.options[option_name]) if self.options[option_name] in providers else 0
+
+            # Handle legacy 'local' provider
+            current_provider = self.options[option_name]
+            if current_provider == 'local':
+                current_provider = 'custom'
+                self.options[option_name] = 'custom'
+
+            current_index = providers.index(current_provider) if current_provider in providers else 0
             next_index = (current_index + 1) % len(providers)
             self.options[option_name] = providers[next_index]
 
@@ -625,6 +641,9 @@ class MenuState:
                 if 'options' in state:
                     for key, value in state['options'].items():
                         if key in self.options:
+                            # Migration: convert 'local' to 'custom' for backward compatibility
+                            if key == 'llm_provider' and value == 'local':
+                                value = 'custom'
                             self.options[key] = value
 
                 # Set status message to indicate loaded state
@@ -809,7 +828,7 @@ def draw_menu(stdscr, state: MenuState) -> None:
             ("Verbose Mode", f"{state.options['verbose']}", "F4"),
             ("SQL Server", f"{state.options['sql_server'] or 'Not set'}", "F5"),
             ("SQL Database", f"{state.options['sql_database'] or 'Not set'}", "F6"),
-            ("LLM Provider", f"{state.options['llm_provider']}", "F7"),
+            ("LLM Provider", f"{state.options['llm_provider']}" + (" (needs URL)" if state.options['llm_provider'] == 'custom' and not state.options['custom_llm_url'] else ""), "F7"),
             ("Custom LLM URL", f"{state.options['custom_llm_url'] or 'Not set'}", "F8"),
             ("Respect .gitignore", f"{state.options['respect_gitignore']}", "F9")
         ]
